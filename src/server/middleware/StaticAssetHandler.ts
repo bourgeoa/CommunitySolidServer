@@ -4,6 +4,7 @@ import escapeStringRegexp from 'escape-string-regexp';
 import * as mime from 'mime-types';
 import { getLoggerFor } from '../../logging/LogUtil';
 import { APPLICATION_OCTET_STREAM } from '../../util/ContentTypes';
+import { createErrorMessage } from '../../util/errors/ErrorUtil';
 import { InternalServerError } from '../../util/errors/InternalServerError';
 import { NotFoundHttpError } from '../../util/errors/NotFoundHttpError';
 import { NotImplementedHttpError } from '../../util/errors/NotImplementedHttpError';
@@ -23,52 +24,6 @@ export class StaticAssetEntry {
     public readonly relativeUrl: string,
     public readonly filePath: string,
   ) {}
-}
-
-function expandFolderAssets(assets: StaticAssetEntry[]): StaticAssetEntry[] {
-  const expanded: StaticAssetEntry[] = [];
-
-  for (const asset of assets) {
-    // Only expand root folder mappings to explicit files for safety
-    // Non-root folders keep catch-all behavior for dynamic file serving
-    const isRootFolder = asset.filePath.endsWith('/') && asset.relativeUrl === '/';
-
-    if (!isRootFolder) {
-      expanded.push(asset);
-      continue;
-    }
-
-    const basePath = ensureTrailingSlash(resolveAssetPath(asset.filePath));
-    const urlPrefix = ensureTrailingSlash(asset.relativeUrl);
-    for (const entry of collectFolderFiles(basePath)) {
-      const relativeUrl = pathPosix.join(urlPrefix, entry.relativePath);
-      expanded.push(new StaticAssetEntry(relativeUrl, entry.absolutePath));
-    }
-  }
-
-  return expanded;
-}
-
-function collectFolderFiles(basePath: string): { relativePath: string; absolutePath: string }[] {
-  try {
-    const entries = readdirSync(basePath, { withFileTypes: true });
-    const files: { relativePath: string; absolutePath: string }[] = [];
-
-    for (const entry of entries) {
-      const absolutePath = joinFilePath(basePath, entry.name);
-      if (entry.isDirectory()) {
-        continue;
-      }
-
-      if (entry.isFile() || entry.isSymbolicLink()) {
-        files.push({ relativePath: entry.name, absolutePath });
-      }
-    }
-
-    return files;
-  } catch (error: unknown) {
-    throw new InternalServerError(`Error expanding static assets from ${basePath}: ${(error as Error).message}`);
-  }
 }
 
 /**
@@ -103,7 +58,7 @@ export class StaticAssetHandler extends HttpHandler {
     this.mappings = {};
     const rootPath = ensureTrailingSlash(new URL(baseUrl).pathname);
 
-    const expandedAssets = expandFolderAssets(assets);
+    const expandedAssets = this.expandFolderAssets(assets);
 
     for (const { relativeUrl, filePath } of expandedAssets) {
       this.mappings[trimLeadingSlashes(relativeUrl)] = resolveAssetPath(filePath);
@@ -137,6 +92,51 @@ export class StaticAssetHandler extends HttpHandler {
 
     // Either match an exact document or a file within a folder (stripping the query string)
     return new RegExp(`^${rootPath}(?:(${files.join('|')})|(${folders.join('|')})([^?]+))(?:\\?.*)?$`, 'u');
+  }
+
+  protected expandFolderAssets(assets: StaticAssetEntry[]): StaticAssetEntry[] {
+    const expanded: StaticAssetEntry[] = [];
+
+    for (const asset of assets) {
+      // Only expand root folder mappings to explicit files for safety
+      // Non-root folders keep catch-all behavior for dynamic file serving
+      const isRootFolder = asset.filePath.endsWith('/') && asset.relativeUrl === '/';
+
+      if (!isRootFolder) {
+        expanded.push(asset);
+        continue;
+      }
+
+      const basePath = ensureTrailingSlash(resolveAssetPath(asset.filePath));
+      for (const entry of this.collectFolderFiles(basePath)) {
+        const relativeUrl = pathPosix.join('/', entry.relativePath);
+        expanded.push(new StaticAssetEntry(relativeUrl, entry.absolutePath));
+      }
+    }
+
+    return expanded;
+  }
+
+  protected collectFolderFiles(basePath: string): { relativePath: string; absolutePath: string }[] {
+    try {
+      const entries = readdirSync(basePath, { withFileTypes: true });
+      const files: { relativePath: string; absolutePath: string }[] = [];
+
+      for (const entry of entries) {
+        const absolutePath = joinFilePath(basePath, entry.name);
+        if (entry.isDirectory()) {
+          continue;
+        }
+
+        if (entry.isFile() || entry.isSymbolicLink()) {
+          files.push({ relativePath: entry.name, absolutePath });
+        }
+      }
+
+      return files;
+    } catch (error: unknown) {
+      throw new InternalServerError(`Error expanding static assets from ${basePath}: ${createErrorMessage(error)}`);
+    }
   }
 
   /**
