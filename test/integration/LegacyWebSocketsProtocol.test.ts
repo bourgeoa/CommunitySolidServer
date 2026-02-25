@@ -44,6 +44,30 @@ describe('A server with the Solid WebSockets API behind a proxy', (): void => {
   describe('when a WebSocket client connects', (): void => {
     let client: WebSocket;
     const messages = new Array<string>();
+    async function waitForMessages(count: number, timeoutMs = 2000): Promise<void> {
+      return new Promise((resolve, reject): void => {
+        if (messages.length >= count) {
+          resolve();
+          return;
+        }
+        let timer: NodeJS.Timeout;
+        function cleanup(): void {
+          clearTimeout(timer);
+          client.off('message', onMessage);
+        }
+        function onMessage(): void {
+          if (messages.length >= count) {
+            cleanup();
+            resolve();
+          }
+        }
+        timer = setTimeout((): void => {
+          cleanup();
+          reject(new Error(`Timed out waiting for ${count} WebSocket message(s)`));
+        }, timeoutMs);
+        client.on('message', onMessage);
+      });
+    }
 
     beforeAll(async(): Promise<void> => {
       client = new WebSocket(`ws://localhost:${port}`, [ 'solid-0.1' ], { headers });
@@ -90,6 +114,7 @@ describe('A server with the Solid WebSockets API behind a proxy', (): void => {
           },
           body: '{}',
         });
+        await waitForMessages(2);
         expect(messages).toEqual([
           'pub https://example.pod/',
           'pub https://example.pod/my-resource',
