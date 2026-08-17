@@ -136,7 +136,7 @@ describe('PodQuotaStrategy', (): void => {
     });
 
     it('stops at a root container when its metadata is missing (NotFound).', async(): Promise<void> => {
-      // getMetadata throws NotFound at the subdomain root (a root container) —
+      // Metadata is missing (NotFound) at the subdomain root (a root container) —
       // discovery must stop there and report no pod.
       accessor.getMetadata.mockImplementationOnce((): any => {
         throw new NotFoundHttpError();
