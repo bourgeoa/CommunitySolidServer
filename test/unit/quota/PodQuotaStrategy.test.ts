@@ -128,5 +128,22 @@ describe('PodQuotaStrategy', (): void => {
       const result = strategy.getAvailableSpace({ path: 'http://localhost:3000/.internal/accounts/123' });
       await expect(result).resolves.toEqual(expect.objectContaining({ amount: Number.MAX_SAFE_INTEGER }));
     });
+
+    it('treats the exact `/.internal` container as internal (no trailing slash).', async(): Promise<void> => {
+      strategy = new PodQuotaStrategy(mockSize, mockReporter, subdomainStrategy, accessor);
+      const result = strategy.getAvailableSpace({ path: 'http://localhost:3000/.internal' });
+      await expect(result).resolves.toEqual(expect.objectContaining({ amount: Number.MAX_SAFE_INTEGER }));
+    });
+
+    it('stops at a root container when its metadata is missing (NotFound).', async(): Promise<void> => {
+      // getMetadata throws NotFound at the subdomain root (a root container) —
+      // discovery must stop there and report no pod.
+      accessor.getMetadata.mockImplementationOnce((): any => {
+        throw new NotFoundHttpError();
+      });
+      strategy = new PodQuotaStrategy(mockSize, mockReporter, subdomainStrategy, accessor);
+      const result = strategy.getAvailableSpace({ path: 'http://alice.localhost:3000/' });
+      await expect(result).resolves.toEqual(expect.objectContaining({ amount: Number.MAX_SAFE_INTEGER }));
+    });
   });
 });

@@ -85,11 +85,6 @@ const INTERNAL_PATH_REGEX = /^\/\.internal(?:\/|$)/u;
 
 /** Whether the identifier points into CSS-internal storage (`/.internal/`). */
 function isInternalPath(identifier: ResourceIdentifier): boolean {
-  let path = identifier.path;
-  try {
-    path = new URL(identifier.path).pathname;
-  } catch {
-    // Not a URL — compare the raw path.
-  }
-  return INTERNAL_PATH_REGEX.test(path);
+  // Identifiers are always canonical URLs.
+  return INTERNAL_PATH_REGEX.test(new URL(identifier.path).pathname);
 }
