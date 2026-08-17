@@ -8,6 +8,7 @@ import type { SizeReporter } from '../../../src/storage/size-reporter/SizeReport
 import { NotFoundHttpError } from '../../../src/util/errors/NotFoundHttpError';
 import type { IdentifierStrategy } from '../../../src/util/identifiers/IdentifierStrategy';
 import { SingleRootIdentifierStrategy } from '../../../src/util/identifiers/SingleRootIdentifierStrategy';
+import { SubdomainIdentifierStrategy } from '../../../src/util/identifiers/SubdomainIdentifierStrategy';
 import { PIM, RDF } from '../../../src/util/Vocabularies';
 import { mockFileSystem } from '../../util/Util';
 
@@ -75,6 +76,57 @@ describe('PodQuotaStrategy', (): void => {
       });
       const result = strategy.getAvailableSpace({ path: `${base}nested/nested2/file.txt` });
       await expect(result).rejects.toThrow('error');
+    });
+  });
+
+  describe('in subdomain mode', (): void => {
+    // Each subdomain is a pod root, and IS a root container for
+    // SubdomainIdentifierStrategy. searchPimStorage must read the pim:Storage
+    // metadata BEFORE stopping at the root container, otherwise no pod is ever
+    // found and quota is silently unlimited.
+    let subdomainStrategy: IdentifierStrategy;
+
+    beforeEach((): void => {
+      subdomainStrategy = new SubdomainIdentifierStrategy(base);
+      accessor.getMetadata.mockImplementation(
+        async(identifier: ResourceIdentifier): Promise<RepresentationMetadata> => {
+          const res = new RepresentationMetadata();
+          if (identifier.path === 'http://alice.localhost:3000/') {
+            res.add(RDF.terms.type, PIM.Storage);
+          }
+          return res;
+        },
+      );
+    });
+
+    it('should find the pod when writing inside a subdomain pod (pod root is a root container).', async(): Promise<void> => {
+      strategy = new PodQuotaStrategy(mockSize, mockReporter, subdomainStrategy, accessor);
+      const result = strategy.getAvailableSpace({ path: 'http://alice.localhost:3000/public/file.txt' });
+      await expect(result).resolves.toEqual(expect.objectContaining({ amount: mockSize.amount }));
+      expect(mockReporter.getSize).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return MAX_SAFE_INTEGER when writing to the base root (not a pod).', async(): Promise<void> => {
+      strategy = new PodQuotaStrategy(mockSize, mockReporter, subdomainStrategy, accessor);
+      const result = strategy.getAvailableSpace({ path: 'http://localhost:3000/file.txt' });
+      await expect(result).resolves.toEqual(expect.objectContaining({ amount: Number.MAX_SAFE_INTEGER }));
+    });
+
+    it('should return MAX_SAFE_INTEGER for internal writes even when the base root is a storage.', async(): Promise<void> => {
+      // Simulate RootStorageLocationStrategy: the base root is also marked as
+      // a storage. Internal writes (`/.internal/`) must still be unlimited.
+      accessor.getMetadata.mockImplementation(
+        async(identifier: ResourceIdentifier): Promise<RepresentationMetadata> => {
+          const res = new RepresentationMetadata();
+          if (identifier.path === 'http://alice.localhost:3000/' || identifier.path === 'http://localhost:3000/') {
+            res.add(RDF.terms.type, PIM.Storage);
+          }
+          return res;
+        },
+      );
+      strategy = new PodQuotaStrategy(mockSize, mockReporter, subdomainStrategy, accessor);
+      const result = strategy.getAvailableSpace({ path: 'http://localhost:3000/.internal/accounts/123' });
+      await expect(result).resolves.toEqual(expect.objectContaining({ amount: Number.MAX_SAFE_INTEGER }));
     });
   });
 });

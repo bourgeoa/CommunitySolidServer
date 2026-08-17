@@ -40,26 +40,57 @@ export class PodQuotaStrategy extends QuotaStrategy {
 
   /** Finds the closest parent container that has pim:storage as metadata */
   private async searchPimStorage(identifier: ResourceIdentifier): Promise<ResourceIdentifier | undefined> {
-    if (this.identifierStrategy.isRootContainer(identifier)) {
+    // CSS-internal storage (locks, IDP adapter, temp files, accounts, ...)
+    // lives under `/.internal/` and is never part of a pod — quota does not
+    // apply to it. This also prevents the base root (which can itself be
+    // marked as a storage, e.g. `RootStorageLocationStrategy`) from being
+    // treated as a pod for internal writes.
+    if (isInternalPath(identifier)) {
       return;
     }
 
     let metadata: RepresentationMetadata;
-    const parent = this.identifierStrategy.getParentContainer(identifier);
 
     try {
       metadata = await this.accessor.getMetadata(identifier);
     } catch (error: unknown) {
       if (error instanceof NotFoundHttpError) {
-        // Resource and/or its metadata do not exist
-        return this.searchPimStorage(parent);
+        // Resource and/or its metadata do not exist — stop at a root container
+        // (nothing above it can be a pod), otherwise walk up.
+        if (this.identifierStrategy.isRootContainer(identifier)) {
+          return;
+        }
+        return this.searchPimStorage(this.identifierStrategy.getParentContainer(identifier));
       }
       throw error;
     }
 
-    const hasPimStorageMetadata = metadata!.getAll(RDF.terms.type)
+    const hasPimStorageMetadata = metadata.getAll(RDF.terms.type)
       .some((term): boolean => term.value === PIM.Storage);
+    if (hasPimStorageMetadata) {
+      return identifier;
+    }
 
-    return hasPimStorageMetadata ? identifier : this.searchPimStorage(parent);
+    // A root container can still be a pod — in subdomain mode every pod root
+    // (e.g. https://alice.example.com/) IS a root container. Only stop here
+    // AFTER the metadata check found no pim:Storage.
+    if (this.identifierStrategy.isRootContainer(identifier)) {
+      return;
+    }
+    return this.searchPimStorage(this.identifierStrategy.getParentContainer(identifier));
   }
+}
+
+const INTERNAL_PATH_REGEX = /^\/\.internal(?:\/|$)/u;
+
+/** Whether the identifier points into CSS-internal storage (`/.internal/`). */
+function isInternalPath(identifier: ResourceIdentifier): boolean {
+  let path = identifier.path;
+  try {
+    path = new URL(identifier.path).pathname;
+  } catch {
+    // Not a URL — compare the raw path.
+  }
+  return INTERNAL_PATH_REGEX.test(path);
+}
 }
