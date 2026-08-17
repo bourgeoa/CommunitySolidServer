@@ -93,4 +93,3 @@ function isInternalPath(identifier: ResourceIdentifier): boolean {
   }
   return INTERNAL_PATH_REGEX.test(path);
 }
-}

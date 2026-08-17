@@ -99,7 +99,7 @@ describe('PodQuotaStrategy', (): void => {
       );
     });
 
-    it('should find the pod when writing inside a subdomain pod (pod root is a root container).', async(): Promise<void> => {
+    it('finds the pod inside a subdomain pod (pod root is a root container).', async(): Promise<void> => {
       strategy = new PodQuotaStrategy(mockSize, mockReporter, subdomainStrategy, accessor);
       const result = strategy.getAvailableSpace({ path: 'http://alice.localhost:3000/public/file.txt' });
       await expect(result).resolves.toEqual(expect.objectContaining({ amount: mockSize.amount }));
@@ -112,7 +112,7 @@ describe('PodQuotaStrategy', (): void => {
       await expect(result).resolves.toEqual(expect.objectContaining({ amount: Number.MAX_SAFE_INTEGER }));
     });
 
-    it('should return MAX_SAFE_INTEGER for internal writes even when the base root is a storage.', async(): Promise<void> => {
+    it('keeps internal writes unlimited even when the base root is a storage.', async(): Promise<void> => {
       // Simulate RootStorageLocationStrategy: the base root is also marked as
       // a storage. Internal writes (`/.internal/`) must still be unlimited.
       accessor.getMetadata.mockImplementation(

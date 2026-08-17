@@ -93,11 +93,11 @@ describe('A QuotaStrategy', (): void => {
       expect(spy).toHaveBeenCalledTimes(1);
 
       const done = new Promise<void>((resolve): void => {
-        track.on('data', (): void => { /* consume */ });
+        track.on('data', (): void => { /* Consume */ });
         track.on('end', (): void => resolve());
         track.on('error', (): void => resolve());
       });
-      // ...and writing chunks through the guard must NOT recompute it.
+      // Writing chunks through the guard must NOT recompute it.
       track.write(Buffer.from('A'.repeat(50)));
       track.write(Buffer.from('A'.repeat(50)));
       track.end();
