@@ -72,8 +72,15 @@ export class PodQuotaStrategy extends QuotaStrategy {
       }
     }
 
-    // Not a storage (or it does not exist) — stop at a root container
-    // (nothing above it can be a pod).
+    // Not a storage (or it does not exist) — keep walking up.
+    return this.searchParentStorage(identifier);
+  }
+
+  /**
+   * Continues the search in the parent container, unless the identifier is a
+   * root container (nothing above it can be a pod).
+   */
+  private async searchParentStorage(identifier: ResourceIdentifier): Promise<ResourceIdentifier | undefined> {
     if (this.identifierStrategy.isRootContainer(identifier)) {
       return;
     }
