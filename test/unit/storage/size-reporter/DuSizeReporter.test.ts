@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,6 +6,13 @@ import type { ResourceIdentifier } from '../../../../src/http/representation/Res
 import type { FileIdentifierMapper } from '../../../../src/storage/mapping/FileIdentifierMapper';
 import type { Size } from '../../../../src/storage/size-reporter/Size';
 import { DuSizeReporter } from '../../../../src/storage/size-reporter/DuSizeReporter';
+
+// Wrap the real execFile so individual tests can simulate du successes and failures
+// (this keeps the tests platform-independent: with and without a real du binary).
+jest.mock('node:child_process', (): any => {
+  const actual = jest.requireActual('node:child_process');
+  return { ...actual, execFile: jest.fn(actual.execFile) };
+});
 
 // Force the du-based path (works even where du is absent — the Node walk
 // produces the same apparent-byte sum for a simple tree).
@@ -40,6 +48,7 @@ describe('A DuSizeReporter', (): void => {
   beforeEach(async(): Promise<void> => {
     root = await fs.mkdtemp(join(tmpdir(), 'du-size-reporter-'));
     mapper = createMapper(root);
+    jest.mocked(execFile).mockClear();
   });
 
   afterEach(async(): Promise<void> => {
@@ -124,6 +133,12 @@ describe('A DuSizeReporter', (): void => {
     await expect(reporter.calculateChunkSize(Buffer.alloc(17))).resolves.toBe(17);
   });
 
+  it('calculates the chunk size for non-buffer chunks.', async(): Promise<void> => {
+    const reporter = new DuSizeReporter(mapper, root);
+    await expect(reporter.calculateChunkSize({ length: 5 })).resolves.toBe(5);
+    await expect(reporter.calculateChunkSize({})).resolves.toBe(0);
+  });
+
   it('returns the byte unit.', async(): Promise<void> => {
     const reporter = new DuSizeReporter(mapper, root);
     expect(reporter.getUnit()).toBe('bytes');
@@ -133,5 +148,105 @@ describe('A DuSizeReporter', (): void => {
     const reporter = new DuSizeReporter(mapper, root);
     const size: Size = await reporter.getSize({ path: 'http://example.com/nope' });
     expect(size.amount).toBe(0);
+  });
+
+  it('parses du output and passes the ignore folders as exclude patterns.', async(): Promise<void> => {
+    jest.mocked(execFile).mockImplementationOnce(
+      (command: string, args: string[], options: any, callback: any): void => {
+        expect(command).toBe('du');
+        expect(args).toContain('--exclude');
+        expect(args).toContain('.internal');
+        callback(null, { stdout: '123\t/path\n', stderr: '' });
+      },
+    );
+    const reporter = new ForceDuReporter(mapper, root, [ '^/\\.internal$', '(^|/)\\.internal$' ]);
+    const size = await reporter.getSize({ path: 'http://example.com/a.txt' });
+    expect(size.amount).toBe(123);
+  });
+
+  it('falls back to the Node walk when du output cannot be parsed.', async(): Promise<void> => {
+    jest.mocked(execFile).mockImplementationOnce(
+      (command: string, args: string[], options: any, callback: any): void => {
+        callback(null, { stdout: 'garbage output\n', stderr: '' });
+      },
+    );
+    const reporter = new ForceDuReporter(mapper, root);
+    await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
+    const size = await reporter.getSize({ path: 'http://example.com/a.txt' });
+    expect(size.amount).toBe(100);
+  });
+
+  it('falls back to the Node walk when du fails.', async(): Promise<void> => {
+    jest.mocked(execFile).mockImplementationOnce(
+      (command: string, args: string[], options: any, callback: any): void => {
+        callback(new Error('du failed'));
+      },
+    );
+    const reporter = new ForceDuReporter(mapper, root);
+    await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
+    const size = await reporter.getSize({ path: 'http://example.com/a.txt' });
+    expect(size.amount).toBe(100);
+  });
+
+  it('detects GNU du when --version succeeds.', async(): Promise<void> => {
+    jest.mocked(execFile)
+      .mockImplementationOnce((command: string, args: string[], options: any, callback: any): void => {
+        callback(null, { stdout: 'du (GNU coreutils) 9.1\n', stderr: '' });
+      })
+      .mockImplementationOnce((command: string, args: string[], options: any, callback: any): void => {
+        callback(null, { stdout: '100\t/path\n', stderr: '' });
+      });
+    const reporter = new DuSizeReporter(mapper, root);
+    await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
+    const size = await reporter.getSize({ path: 'http://example.com/a.txt' });
+    expect(size.amount).toBe(100);
+  });
+
+  it('detects no du when the command is missing and caches the flavor.', async(): Promise<void> => {
+    jest.mocked(execFile).mockImplementationOnce(
+      (command: string, args: string[], options: any, callback: any): void => {
+        callback(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+      },
+    );
+    const reporter = new DuSizeReporter(mapper, root);
+    await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
+    await fs.writeFile(join(root, 'b.txt'), Buffer.alloc(50));
+    await expect((await reporter.getSize({ path: 'http://example.com/a.txt' })).amount).toBe(100);
+    // The second resource reuses the cached flavor without probing du again.
+    await expect((await reporter.getSize({ path: 'http://example.com/b.txt' })).amount).toBe(50);
+    expect(execFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('assumes BSD when --version fails for another reason.', async(): Promise<void> => {
+    jest.mocked(execFile)
+      .mockImplementationOnce((command: string, args: string[], options: any, callback: any): void => {
+        callback(Object.assign(new Error('denied'), { code: 'EACCES' }));
+      })
+      .mockImplementationOnce((command: string, args: string[], options: any, callback: any): void => {
+        // BSD flags are used; make the call fail so the Node walk takes over.
+        expect(args[0]).toBe('-s');
+        expect(args).toContain('-A');
+        expect(args).toContain('-I');
+        expect(args).toContain('.internal');
+        callback(new Error('bsd failed'));
+      });
+    const reporter = new DuSizeReporter(mapper, root, [ '^/\\.internal$' ]);
+    await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
+    const size = await reporter.getSize({ path: 'http://example.com/a.txt' });
+    expect(size.amount).toBe(100);
+  });
+
+  it('walks directories recursively with the Node fallback, honoring ignoreFolders.', async(): Promise<void> => {
+    const reporter = new ForceNodeReporter(mapper, root, [ '^/\\.internal$' ]);
+    await fs.mkdir(join(root, 'sub'), { recursive: true });
+    await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
+    await fs.writeFile(join(root, 'sub', 'b.txt'), Buffer.alloc(50));
+    await fs.mkdir(join(root, '.internal'));
+    await fs.writeFile(join(root, '.internal', 'x.txt'), Buffer.alloc(1000));
+    const withIgnore = await reporter.getSize({ path: 'http://example.com/' });
+    const withoutIgnore = await new ForceNodeReporter(mapper, root).getSize({ path: 'http://example.com/' });
+    // The ignored .internal content is excluded and the visible files are counted.
+    expect(withIgnore.amount).toBeLessThan(withoutIgnore.amount);
+    expect(withIgnore.amount).toBeGreaterThanOrEqual(150);
   });
 });

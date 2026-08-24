@@ -162,4 +162,12 @@ describe('A QuotaDeltaDataAccessor', (): void => {
     // And it doesn't crash.
     await accessor.deleteResource(outside);
   });
+
+  it('skips delta bookkeeping on internal paths.', async(): Promise<void> => {
+    const internal = { path: 'http://example.com/.internal/foo' };
+    await writeDoc(accessor, internal, 100);
+    await accessor.deleteResource(internal);
+    // No pod is discovered and no counter entry is created.
+    await expect(counter.isPodRoot(POD)).resolves.toBe(false);
+  });
 });

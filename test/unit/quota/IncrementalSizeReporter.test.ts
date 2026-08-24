@@ -61,4 +61,9 @@ describe('An IncrementalSizeReporter', (): void => {
     await expect(reporter.calculateChunkSize(Buffer.alloc(9))).resolves.toBe(9);
     await expect(reporter.estimateSize({ contentLength: 42 } as any)).resolves.toBe(42);
   });
+
+  it('calculates the chunk size for non-buffer chunks.', async(): Promise<void> => {
+    await expect(reporter.calculateChunkSize({ length: 5 })).resolves.toBe(5);
+    await expect(reporter.calculateChunkSize({})).resolves.toBe(0);
+  });
 });
