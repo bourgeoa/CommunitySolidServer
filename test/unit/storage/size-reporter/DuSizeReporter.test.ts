@@ -152,7 +152,7 @@ describe('A DuSizeReporter', (): void => {
 
   it('parses du output and passes the ignore folders as exclude patterns.', async(): Promise<void> => {
     jest.mocked(execFile).mockImplementationOnce(
-      (command: string, args: any, options: any, callback: any): void => {
+      (command: string, args: any, options: any, callback: any): any => {
         expect(command).toBe('du');
         expect(args).toContain('--exclude');
         expect(args).toContain('.internal');
@@ -166,7 +166,7 @@ describe('A DuSizeReporter', (): void => {
 
   it('falls back to the Node walk when du output cannot be parsed.', async(): Promise<void> => {
     jest.mocked(execFile).mockImplementationOnce(
-      (command: string, args: any, options: any, callback: any): void => {
+      (command: string, args: any, options: any, callback: any): any => {
         callback(null, { stdout: 'garbage output\n', stderr: '' });
       },
     );
@@ -178,7 +178,7 @@ describe('A DuSizeReporter', (): void => {
 
   it('falls back to the Node walk when du fails.', async(): Promise<void> => {
     jest.mocked(execFile).mockImplementationOnce(
-      (command: string, args: any, options: any, callback: any): void => {
+      (command: string, args: any, options: any, callback: any): any => {
         callback(new Error('du failed'));
       },
     );
@@ -190,10 +190,10 @@ describe('A DuSizeReporter', (): void => {
 
   it('detects GNU du when --version succeeds.', async(): Promise<void> => {
     jest.mocked(execFile)
-      .mockImplementationOnce((command: string, args: any, options: any, callback: any): void => {
+      .mockImplementationOnce((command: string, args: any, options: any, callback: any): any => {
         callback(null, { stdout: 'du (GNU coreutils) 9.1\n', stderr: '' });
       })
-      .mockImplementationOnce((command: string, args: any, options: any, callback: any): void => {
+      .mockImplementationOnce((command: string, args: any, options: any, callback: any): any => {
         callback(null, { stdout: '100\t/path\n', stderr: '' });
       });
     const reporter = new DuSizeReporter(mapper, root);
@@ -204,25 +204,25 @@ describe('A DuSizeReporter', (): void => {
 
   it('detects no du when the command is missing and caches the flavor.', async(): Promise<void> => {
     jest.mocked(execFile).mockImplementationOnce(
-      (command: string, args: any, options: any, callback: any): void => {
+      (command: string, args: any, options: any, callback: any): any => {
         callback(Object.assign(new Error('missing'), { code: 'ENOENT' }));
       },
     );
     const reporter = new DuSizeReporter(mapper, root);
     await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
     await fs.writeFile(join(root, 'b.txt'), Buffer.alloc(50));
-    await expect((await reporter.getSize({ path: 'http://example.com/a.txt' })).amount).toBe(100);
+    expect((await reporter.getSize({ path: 'http://example.com/a.txt' })).amount).toBe(100);
     // The second resource reuses the cached flavor without probing du again.
-    await expect((await reporter.getSize({ path: 'http://example.com/b.txt' })).amount).toBe(50);
+    expect((await reporter.getSize({ path: 'http://example.com/b.txt' })).amount).toBe(50);
     expect(execFile).toHaveBeenCalledTimes(1);
   });
 
   it('assumes BSD when --version fails for another reason.', async(): Promise<void> => {
     jest.mocked(execFile)
-      .mockImplementationOnce((command: string, args: any, options: any, callback: any): void => {
+      .mockImplementationOnce((command: string, args: any, options: any, callback: any): any => {
         callback(Object.assign(new Error('denied'), { code: 'EACCES' }));
       })
-      .mockImplementationOnce((command: string, args: any, options: any, callback: any): void => {
+      .mockImplementationOnce((command: string, args: any, options: any, callback: any): any => {
         // BSD flags are used; make the call fail so the Node walk takes over.
         expect(args[0]).toBe('-s');
         expect(args).toContain('-A');
