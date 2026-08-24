@@ -77,8 +77,13 @@ describe('A QuotaCounter', (): void => {
     const counter = new QuotaCounter(mapper, root, IGNORE);
     await counter.register(POD);
     await counter.add(POD, 100);
-    // Out-of-band change: a direct child appears in the pod root.
+    // Out-of-band change: a direct child appears in the pod root. Some filesystems
+    // (e.g. NTFS mounted via WSL) have coarse directory mtime granularity, so the
+    // new child may not bump the root mtime immediately; force it to a clearly
+    // different value to make the staleness detection deterministic.
     await fs.writeFile(join(root, 'alice', 'extra.bin'), Buffer.alloc(400));
+    const oldTime = new Date(2000, 0, 1);
+    await fs.utimes(join(root, 'alice'), oldTime, oldTime);
     const size = await counter.getSize(POD);
     expect(size.amount).toBe(await expectedWalk(root, mapper, POD));
     expect(size.amount).toBeGreaterThanOrEqual(400);
@@ -165,12 +170,16 @@ describe('A QuotaCounter', (): void => {
 
   it('records a zero mtime when the pod root is a file.', async(): Promise<void> => {
     // A file as the pod root: podRootMtime's isDirectory() is false → mtime 0.
+    // Use a non-trailing-slash identifier so the mapped path has no trailing
+    // slash: `fs.stat` on a file path WITH a trailing slash fails with ENOTDIR
+    // on POSIX, which would take the catch branch instead of this one.
+    const pod = { path: 'http://example.com/alice' };
     await fs.rm(join(root, 'alice'), { recursive: true, force: true });
     await fs.writeFile(join(root, 'alice'), Buffer.alloc(10));
     const counter = new QuotaCounter(mapper, root, IGNORE);
-    await counter.register(POD);
-    await counter.add(POD, 100);
-    await expect(counter.getSize(POD)).resolves.toEqual({ unit: 'bytes', amount: 100 });
+    await counter.register(pod);
+    await counter.add(pod, 100);
+    await expect(counter.getSize(pod)).resolves.toEqual({ unit: 'bytes', amount: 100 });
   });
 
   it('walks containers in sizeOfResource and exposes walk().', async(): Promise<void> => {
