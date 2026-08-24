@@ -1,0 +1,64 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "comment": "Design C: incremental per-pod byte counter. QuotaCounter + IncrementalSizeReporter + QuotaDeltaDataAccessor (delta hook). After a pod's one-time bootstrap walk, writes are O(1); a full du/Node walk only seeds/repairs a pod's counter. Import this on top of the existing pod-quota backend (e.g. alongside css:config/storage/backend/pod-quota-file.json) to opt in — the default pod-quota-file.json is unchanged.",
+  "@graph": [
+    {
+      "comment": "The shared per-pod counter (in-memory + sidecar + recount engine).",
+      "@id": "urn:solid-server:default:QuotaCounter",
+      "@type": "QuotaCounter",
+      "fileIdentifierMapper": {
+        "@id": "urn:solid-server:default:FileIdentifierMapper"
+      },
+      "rootFilePath": {
+        "@id": "urn:solid-server:default:variable:rootFilePath"
+      },
+      "ignoreFolders": [
+        "(^|/)\\.internal$"
+      ]
+    },
+    {
+      "comment": "SizeReporter backed by the counter: O(1) pod reads, single stat for resources.",
+      "@type": "Override",
+      "overrideInstance": {
+        "@id": "urn:solid-server:default:SizeReporter"
+      },
+      "overrideParameters": {
+        "@type": "IncrementalSizeReporter",
+        "counter": {
+          "@id": "urn:solid-server:default:QuotaCounter"
+        }
+      }
+    },
+    {
+      "comment": "Delta hook: wraps the accessor chain and feeds per-write deltas to the counter. Preserves the content-length filter and the QuotaValidator.",
+      "@type": "Override",
+      "overrideInstance": {
+        "@id": "urn:solid-server:default:FileDataAccessor"
+      },
+      "overrideParameters": {
+        "@type": "QuotaDeltaDataAccessor",
+        "fileIdentifierMapper": {
+          "@id": "urn:solid-server:default:FileIdentifierMapper"
+        },
+        "identifierStrategy": {
+          "@id": "urn:solid-server:default:IdentifierStrategy"
+        },
+        "counter": {
+          "@id": "urn:solid-server:default:QuotaCounter"
+        },
+        "accessor": {
+          "@type": "FilterMetadataDataAccessor",
+          "accessor": {
+            "@id": "urn:solid-server:default:ValidatingFileDataAccessor"
+          },
+          "filters": [
+            {
+              "@type": "FilterPattern",
+              "predicate": "http://www.w3.org/2011/http-headers#content-length"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
