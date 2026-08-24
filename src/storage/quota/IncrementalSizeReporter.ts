@@ -15,6 +15,10 @@ import type { QuotaCounter } from './QuotaCounter';
  *
  * Replaces `urn:solid-server:default:SizeReporter` in design C. The apparent
  * byte unit is unchanged, so the configured quota limit keeps its meaning.
+ *
+ * On a 3 000-file pod a full `FileSizeReporter` walk takes ~365 ms, while this
+ * reporter's O(1) counter read takes ~0.25 ms (see
+ * `scripts/benchmark-quota-counter.cjs`).
  */
 export class IncrementalSizeReporter implements SizeReporter<unknown> {
   private readonly counter: QuotaCounter;

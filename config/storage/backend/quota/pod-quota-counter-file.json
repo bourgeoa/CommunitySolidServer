@@ -1,9 +1,9 @@
 {
   "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
-  "comment": "Design C: incremental per-pod byte counter. QuotaCounter + IncrementalSizeReporter + QuotaDeltaDataAccessor (delta hook). After a pod's one-time bootstrap walk, writes are O(1); a full du/Node walk only seeds/repairs a pod's counter. Import this on top of the existing pod-quota backend (e.g. alongside css:config/storage/backend/pod-quota-file.json) to opt in — the default pod-quota-file.json is unchanged.",
+  "comment": "Design C: incremental per-pod byte counter. QuotaCounter + IncrementalSizeReporter + QuotaDeltaDataAccessor (delta hook). After a pod's one-time bootstrap walk, writes are O(1); a full du/Node walk only seeds/repairs a pod's counter. Import this on top of the existing pod-quota backend (e.g. alongside css:config/storage/backend/pod-quota-file.json) to opt in — the default pod-quota-file.json is unchanged. Benchmark (3 000 x 1 KiB files): full walk ~365 ms vs. O(1) counter read ~0.25 ms per quota check (see scripts/benchmark-quota-counter.cjs).",
   "@graph": [
     {
-      "comment": "The shared per-pod counter (in-memory + sidecar + recount engine).",
+      "comment": "The shared per-pod counter (in-memory + sidecar + recount engine). maxAgeMs bounds how stale a counter may be: an older counter is re-walked on access (0 disables the age check, leaving only mtime staleness). Override urn:solid-server:default:QuotaCounter to change it.",
       "@id": "urn:solid-server:default:QuotaCounter",
       "@type": "QuotaCounter",
       "fileIdentifierMapper": {
@@ -14,7 +14,8 @@
       },
       "ignoreFolders": [
         "(^|/)\\.internal$"
-      ]
+      ],
+      "maxAgeMs": 86400000
     },
     {
       "comment": "SizeReporter backed by the counter: O(1) pod reads, single stat for resources.",

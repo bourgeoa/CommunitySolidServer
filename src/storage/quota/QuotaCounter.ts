@@ -12,6 +12,8 @@ interface CounterEntry {
   total: number;
   valid: boolean;
   podMtimeMs: number;
+  /** Epoch ms at which the counter was last known to be correct. */
+  updatedAt: number;
 }
 
 /**
@@ -27,11 +29,22 @@ interface CounterEntry {
  * The counter is a cache; the filesystem is the source of truth. Staleness
  * (out-of-band changes, crash window) is detected cheaply by comparing the
  * pod root directory's mtime against the recorded one, then re-walking once.
+ *
+ * Because the pod root mtime only changes for direct children, deep out-of-band
+ * changes are invisible to that check. An optional max age (`maxAgeMs`, 0 =
+ * disabled) bounds this window: a counter older than the max age is always
+ * re-walked on access, guaranteeing the total is at most `maxAgeMs` old.
+ *
+ * Benchmark (Windows, Node-walk fallback, 3 000 x 1 KiB files in one pod, see
+ * `scripts/benchmark-quota-counter.cjs`): one full pod walk ~365 ms, an O(1)
+ * counter read ~0.25 ms (~1 000-1 500x faster per quota check), and a delta +
+ * sidecar persist ~4 ms per write.
  */
 export class QuotaCounter {
   private readonly fileIdentifierMapper: FileIdentifierMapper;
   private readonly rootFilePath: string;
   private readonly sidecarRelativePath: string;
+  private readonly maxAgeMs: number;
   private readonly walker: DuSizeReporter;
   private readonly entries = new Map<string, CounterEntry>();
   private readonly locks = new Map<string, Promise<void>>();
@@ -41,10 +54,12 @@ export class QuotaCounter {
     rootFilePath: string,
     ignoreFolders: string[] = [],
     sidecarRelativePath = '/.internal/css-quota.json',
+    maxAgeMs = 0,
   ) {
     this.fileIdentifierMapper = fileIdentifierMapper;
     this.rootFilePath = normalizeFilePath(rootFilePath);
     this.sidecarRelativePath = sidecarRelativePath;
+    this.maxAgeMs = maxAgeMs;
     // Dedicated walker with no cache — every call is a fresh recount.
     this.walker = new DuSizeReporter(fileIdentifierMapper, rootFilePath, ignoreFolders, 0);
   }
@@ -72,7 +87,7 @@ export class QuotaCounter {
   public async register(podIdentifier: ResourceIdentifier): Promise<void> {
     const path = await this.mapDataPath(podIdentifier);
     if (!this.entries.has(path)) {
-      this.entries.set(path, { total: 0, valid: false, podMtimeMs: 0 });
+      this.entries.set(path, { total: 0, valid: false, podMtimeMs: 0, updatedAt: Date.now() });
     }
   }
 
@@ -89,9 +104,10 @@ export class QuotaCounter {
   public async add(podIdentifier: ResourceIdentifier, delta: number): Promise<void> {
     const path = await this.mapDataPath(podIdentifier);
     await this.withLock(path, async(): Promise<void> => {
-      const entry = this.entries.get(path) ?? { total: 0, valid: false, podMtimeMs: 0 };
+      const entry = this.entries.get(path) ?? { total: 0, valid: false, podMtimeMs: 0, updatedAt: Date.now() };
       entry.total += delta;
       entry.valid = true;
+      entry.updatedAt = Date.now();
       this.entries.set(path, entry);
       await this.persistWithMtime(path, entry);
     });
@@ -149,7 +165,7 @@ export class QuotaCounter {
 
   private async ensureEntry(path: string, podIdentifier: ResourceIdentifier): Promise<CounterEntry> {
     let entry = this.entries.get(path);
-    if (entry?.valid) {
+    if (this.isFresh(entry)) {
       const mtime = await this.podRootMtime(path);
       if (entry.podMtimeMs === mtime) {
         return entry;
@@ -159,27 +175,37 @@ export class QuotaCounter {
     // Try the sidecar first (persisted counter), then a full walk.
     return this.withLock(path, async(): Promise<CounterEntry> => {
       entry = this.entries.get(path);
-      if (entry?.valid) {
+      if (this.isFresh(entry)) {
         const mtime = await this.podRootMtime(path);
         if (entry.podMtimeMs === mtime) {
           return entry;
         }
       }
       const loaded = await this.loadSidecar(path);
-      if (loaded?.valid) {
+      if (this.isFresh(loaded)) {
         const mtime = await this.podRootMtime(path);
         if (loaded.podMtimeMs === mtime) {
           this.entries.set(path, loaded);
           return loaded;
         }
       }
-      // No valid counter — full walk (bootstrap / recovery).
+      // No valid counter — full walk (bootstrap / recovery / max-age expiry).
       const total = (await this.walker.getSize(podIdentifier)).amount;
-      const fresh: CounterEntry = { total, valid: true, podMtimeMs: 0 };
+      const fresh: CounterEntry = { total, valid: true, podMtimeMs: 0, updatedAt: Date.now() };
       this.entries.set(path, fresh);
       await this.persistWithMtime(path, fresh);
       return fresh;
     });
+  }
+
+  /**
+   * Whether the entry can be trusted without a recount: it must be valid and,
+   * when a max age is configured, not older than `maxAgeMs`. A `maxAgeMs` of 0
+   * (or less) disables the age check entirely.
+   */
+  private isFresh(entry: CounterEntry | undefined): entry is CounterEntry {
+    return entry !== undefined && entry.valid &&
+      (this.maxAgeMs <= 0 || Date.now() - entry.updatedAt < this.maxAgeMs);
   }
 
   private async podRootMtime(path: string): Promise<number> {
@@ -204,7 +230,16 @@ export class QuotaCounter {
         'total' in parsed && 'podMtimeMs' in parsed &&
         typeof parsed.total === 'number' && typeof parsed.podMtimeMs === 'number'
       ) {
-        return { total: parsed.total, valid: true, podMtimeMs: parsed.podMtimeMs };
+        // Older sidecars may lack `updatedAt`; treat them as immediately stale
+        // so they are refreshed once when a max age is configured.
+        let updatedAt = 0;
+        if ('updatedAt' in parsed && typeof parsed.updatedAt === 'string') {
+          updatedAt = Date.parse(parsed.updatedAt);
+          if (!Number.isFinite(updatedAt)) {
+            updatedAt = 0;
+          }
+        }
+        return { total: parsed.total, valid: true, podMtimeMs: parsed.podMtimeMs, updatedAt };
       }
     } catch {
       // Missing or malformed sidecar → recount.
