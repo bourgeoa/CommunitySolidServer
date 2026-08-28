@@ -77,7 +77,13 @@ export class WrappedExpiringStorage<TKey, TValue> implements ExpiringStorage<TKe
         expired.push(key);
       }
     }
-    await Promise.all(expired.map(async(key): Promise<boolean> => this.source.delete(key)));
+    // Delete in bounded batches to avoid flooding the (locked) storage with concurrent
+    // operations, which can saturate I/O and cause lock timeouts.
+    const batchSize = 32;
+    for (let i = 0; i < expired.length; i += batchSize) {
+      await Promise.all(expired.slice(i, i + batchSize)
+        .map(async(key): Promise<boolean> => this.source.delete(key)));
+    }
     this.logger.debug('Finished removing expired entries');
   }
 
