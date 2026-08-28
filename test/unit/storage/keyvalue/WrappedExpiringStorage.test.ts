@@ -176,4 +176,25 @@ describe('A WrappedExpiringStorage', (): void => {
     }
     mockInterval.mockRestore();
   });
+
+  it('uses the given batch size when deleting expired entries.', async(): Promise<void> => {
+    const mockInterval = jest.spyOn(globalThis, 'setInterval');
+    const mockTimer = { unref: jest.fn() };
+    mockInterval.mockImplementationOnce(jest.fn().mockReturnValueOnce(mockTimer));
+
+    storage = new WrappedExpiringStorage(source, 1, 10);
+    const data = Array.from({ length: 25 }, (_, index): [ string, Internal ] =>
+      [ `key${index}`, createExpires(`data${index}`, yesterday) ]);
+    source.entries.mockImplementationOnce(function* (): any {
+      yield* data;
+    });
+
+    await (mockInterval.mock.calls[0][0] as () => Promise<void>)();
+
+    expect(source.delete).toHaveBeenCalledTimes(25);
+    for (let i = 0; i < 25; i++) {
+      expect(source.delete).toHaveBeenCalledWith(`key${i}`);
+    }
+    mockInterval.mockRestore();
+  });
 });
