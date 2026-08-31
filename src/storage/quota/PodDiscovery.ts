@@ -7,12 +7,6 @@ import type { DataAccessor } from '../accessors/DataAccessor';
 
 /**
  * Finds the closest parent container that has `pim:Storage` as metadata.
- *
- * NOTE: like `PodQuotaStrategy.searchPimStorage` (post #2210), the metadata
- * is read BEFORE testing for a root container. In SUBDOMAIN mode every pod
- * root IS a root container, and a root container can be a pod — testing the
- * root first would return "no pod" for every subdomain pod root, silently
- * disabling pod quota there.
  */
 export async function discoverPod(
   identifier: ResourceIdentifier,

@@ -17,28 +17,8 @@ interface CounterEntry {
 }
 
 /**
- * Incremental per-pod byte counter (design C).
- *
- * Keeps the apparent-byte total of every pod in memory, updated O(1) per
- * write by the {@link QuotaDeltaDataAccessor} delta hook, and persisted to a
- * per-pod sidecar (`<podRoot>/.internal/css-quota.json`, atomic rename) so
- * counters survive restarts. A full `du`/Node walk (via DuSizeReporter) is
- * only used to bootstrap a pod (first access, no sidecar) or recover a
- * de-synchronized counter.
- *
- * The counter is a cache; the filesystem is the source of truth. Staleness
- * (out-of-band changes, crash window) is detected cheaply by comparing the
- * pod root directory's mtime against the recorded one, then re-walking once.
- *
- * Because the pod root mtime only changes for direct children, deep out-of-band
- * changes are invisible to that check. An optional max age (`maxAgeMs`, 0 =
- * disabled) bounds this window: a counter older than the max age is always
- * re-walked on access, guaranteeing the total is at most `maxAgeMs` old.
- *
- * Benchmark (Windows, Node-walk fallback, 3 000 x 1 KiB files in one pod, see
- * `scripts/benchmark-quota-counter.cjs`): one full pod walk ~365 ms, an O(1)
- * counter read ~0.25 ms (~1 000-1 500x faster per quota check), and a delta +
- * sidecar persist ~4 ms per write.
+ * Incremental per-pod byte counter.
+ * The counter is a cache; the filesystem is the source of truth.
  */
 export class QuotaCounter {
   private readonly fileIdentifierMapper: FileIdentifierMapper;
@@ -64,26 +44,16 @@ export class QuotaCounter {
     this.walker = new DuSizeReporter(fileIdentifierMapper, rootFilePath, ignoreFolders, 0);
   }
 
-  /** The QuotaCounter always reports in bytes. */
   public getUnit(): string {
     return UNIT_BYTES;
   }
 
-  /**
-   * Returns the pod's current total, performing a recount (walk) only when
-   * the pod has no valid counter (first access, no sidecar, or staleness).
-   */
   public async getSize(podIdentifier: ResourceIdentifier): Promise<Size> {
     const path = await this.mapDataPath(podIdentifier);
     const entry = await this.ensureEntry(path, podIdentifier);
     return { unit: UNIT_BYTES, amount: entry.total };
   }
 
-  /**
-   * Marks a path as a pod root so {@link IncrementalSizeReporter} routes
-   * pod-root identifiers to the counter. Called by the delta hook when it
-   * first discovers a pod.
-   */
   public async register(podIdentifier: ResourceIdentifier): Promise<void> {
     const path = await this.mapDataPath(podIdentifier);
     if (!this.entries.has(path)) {
@@ -91,16 +61,10 @@ export class QuotaCounter {
     }
   }
 
-  /** Whether the given identifier maps to a known pod root. */
   public async isPodRoot(identifier: ResourceIdentifier): Promise<boolean> {
     return this.entries.has(await this.mapDataPath(identifier));
   }
 
-  /**
-   * Applies a size delta to the pod. Updates the in-memory counter and
-   * persists the sidecar atomically. Per-pod mutex serializes concurrent
-   * writes.
-   */
   public async add(podIdentifier: ResourceIdentifier, delta: number): Promise<void> {
     const path = await this.mapDataPath(podIdentifier);
     await this.withLock(path, async(): Promise<void> => {
@@ -127,12 +91,6 @@ export class QuotaCounter {
     });
   }
 
-  /**
-   * Apparent size of a single resource (not a pod root) — used by the
-   * reporter for the overwritten-resource subtraction in
-   * `QuotaStrategy.getAvailableSpace`. Single stat for a document; walk for a
-   * container.
-   */
   public async sizeOfResource(identifier: ResourceIdentifier): Promise<number> {
     const filePath = await this.mapDataPath(identifier);
     try {
@@ -147,16 +105,11 @@ export class QuotaCounter {
     }
   }
 
-  /** Maps an identifier to its data file path (normalized). */
   public async mapDataPath(identifier: ResourceIdentifier): Promise<string> {
     const { filePath } = await this.fileIdentifierMapper.mapUrlToFilePath(identifier, false);
     return normalizeFilePath(filePath);
   }
 
-  /**
-   * Full apparent-byte walk of a resource/container (used by the delta hook
-   * for container before/after sizing — rare, e.g. create/delete container).
-   */
   public async walk(identifier: ResourceIdentifier): Promise<number> {
     return (await this.walker.getSize(identifier)).amount;
   }
@@ -198,11 +151,6 @@ export class QuotaCounter {
     });
   }
 
-  /**
-   * Whether the entry can be trusted without a recount: it must be valid and,
-   * when a max age is configured, not older than `maxAgeMs`. A `maxAgeMs` of 0
-   * (or less) disables the age check entirely.
-   */
   private isFresh(entry: CounterEntry | undefined): entry is CounterEntry {
     return entry !== undefined && entry.valid &&
       (this.maxAgeMs <= 0 || Date.now() - entry.updatedAt < this.maxAgeMs);
@@ -264,12 +212,6 @@ export class QuotaCounter {
     }
   }
 
-  /**
-   * Persist, then record the pod root mtime AFTER the persist. Persisting the
-   * sidecar may create the `.internal/` directory (a new pod-root child), which
-   * bumps the pod root's mtime — recording the mtime before would leave every
-   * subsequent read thinking the counter is stale.
-   */
   private async persistWithMtime(path: string, entry: CounterEntry): Promise<void> {
     await this.persist(path, entry);
     entry.podMtimeMs = await this.podRootMtime(path);

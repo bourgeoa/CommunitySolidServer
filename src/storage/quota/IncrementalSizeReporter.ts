@@ -12,13 +12,6 @@ import type { QuotaCounter } from './QuotaCounter';
  *   staleness).
  * - `getSize(any other resource)` → single stat (used by
  *   `QuotaStrategy.getAvailableSpace` to subtract the overwritten resource).
- *
- * Replaces `urn:solid-server:default:SizeReporter` in design C. The apparent
- * byte unit is unchanged, so the configured quota limit keeps its meaning.
- *
- * On a 3 000-file pod a full `FileSizeReporter` walk takes ~365 ms, while this
- * reporter's O(1) counter read takes ~0.25 ms (see
- * `scripts/benchmark-quota-counter.cjs`).
  */
 export class IncrementalSizeReporter implements SizeReporter<unknown> {
   private readonly counter: QuotaCounter;
@@ -38,12 +31,10 @@ export class IncrementalSizeReporter implements SizeReporter<unknown> {
     return { unit: UNIT_BYTES, amount: await this.counter.sizeOfResource(identifier) };
   }
 
-  /** The size of a chunk is simply its length in bytes. */
   public async calculateChunkSize(chunk: unknown): Promise<number> {
     return Buffer.isBuffer(chunk) ? chunk.length : Number((chunk as { length?: number }).length) || 0;
   }
 
-  /** The estimated size of a resource is simply the content-length header. */
   public async estimateSize(metadata: RepresentationMetadata): Promise<number | undefined> {
     return metadata.contentLength;
   }

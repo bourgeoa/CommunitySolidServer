@@ -122,26 +122,20 @@ describe('A QuotaDeltaDataAccessor', (): void => {
 
   it('tracks container creation, writes, overwrites and deletes so the counter ' +
     'equals a real walk.', async(): Promise<void> => {
-    // Create the pod root container.
     await accessor.writeContainer(POD, {} as RepresentationMetadata);
-    // Create a document (100 bytes).
     await writeDoc(accessor, RESOURCE, 100);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root)));
 
-    // Overwrite it with a bigger body (150 bytes) → +50.
     await writeDoc(accessor, RESOURCE, 150);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root)));
 
-    // Nested container + resource.
     await accessor.writeContainer(SUB, {} as RepresentationMetadata);
     await writeDoc(accessor, SUB_RESOURCE, 40);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root)));
 
-    // Write metadata for a resource (the .meta file).
     await accessor.writeMetadata(RESOURCE, {} as RepresentationMetadata);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root)));
 
-    // Delete the document → counter drops back to the walk.
     await accessor.deleteResource(RESOURCE);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root)));
   });
@@ -157,9 +151,7 @@ describe('A QuotaDeltaDataAccessor', (): void => {
   it('does not track resources outside any pod (no pim:Storage).', async(): Promise<void> => {
     const outside = { path: 'http://example.com/root-file' };
     await writeDoc(accessor, outside, 999);
-    // No pod was registered → the file is not counted anywhere.
     await expect(counter.isPodRoot({ path: 'http://example.com/' })).resolves.toBe(false);
-    // And it doesn't crash.
     await accessor.deleteResource(outside);
   });
 
@@ -167,7 +159,6 @@ describe('A QuotaDeltaDataAccessor', (): void => {
     const internal = { path: 'http://example.com/.internal/foo' };
     await writeDoc(accessor, internal, 100);
     await accessor.deleteResource(internal);
-    // No pod is discovered and no counter entry is created.
     await expect(counter.isPodRoot(POD)).resolves.toBe(false);
   });
 });

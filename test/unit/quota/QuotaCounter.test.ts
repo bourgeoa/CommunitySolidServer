@@ -169,10 +169,6 @@ describe('A QuotaCounter', (): void => {
   });
 
   it('records a zero mtime when the pod root is a file.', async(): Promise<void> => {
-    // A file as the pod root: podRootMtime's isDirectory() is false → mtime 0.
-    // Use a non-trailing-slash identifier so the mapped path has no trailing
-    // slash: `fs.stat` on a file path WITH a trailing slash fails with ENOTDIR
-    // on POSIX, which would take the catch branch instead of this one.
     const pod = { path: 'http://example.com/alice' };
     await fs.rm(join(root, 'alice'), { recursive: true, force: true });
     await fs.writeFile(join(root, 'alice'), Buffer.alloc(10));

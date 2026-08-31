@@ -76,7 +76,6 @@ describe('A DuSizeReporter', (): void => {
     const reporter = new ForceDuReporter(mapper, root, [], 60_000);
     await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(100));
     const first = await reporter.getSize({ path: 'http://example.com/a.txt' });
-    // Change the file without invalidating — the cache must still serve the old size.
     await fs.writeFile(join(root, 'a.txt'), Buffer.alloc(200));
     const cached = await reporter.getSize({ path: 'http://example.com/a.txt' });
     expect(first.amount).toBe(100);

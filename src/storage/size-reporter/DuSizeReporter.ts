@@ -19,14 +19,9 @@ interface CacheEntry {
 
 /**
  * A {@link SizeReporter} that measures a resource (and its children) in
- * apparent bytes, using GNU/BSD `du` as a fast C-level walk with a per-path
+ * apparent bytes, using GNU/BSD `du` as a fast walk with a per-path
  * TTL cache, falling back to a plain Node walk when no compatible `du`
  * exists (e.g. bare Windows).
- *
- * The unit is apparent bytes (sum of `st_size`) — identical to CSS's
- * {@link FileSizeReporter}, portable across servers/filesystems and
- * user-manageable. `stat.blocks` (disk usage) is deliberately NOT used:
- * the result would depend on the server's filesystem cluster size.
  */
 export class DuSizeReporter implements SizeReporter<unknown> {
   private readonly fileIdentifierMapper: FileIdentifierMapper;
@@ -48,7 +43,6 @@ export class DuSizeReporter implements SizeReporter<unknown> {
     this.ttlMs = ttl;
   }
 
-  /** The DuSizeReporter always returns data in the form of bytes. */
   public getUnit(): string {
     return UNIT_BYTES;
   }
@@ -69,11 +63,7 @@ export class DuSizeReporter implements SizeReporter<unknown> {
     return { unit: UNIT_BYTES, amount };
   }
 
-  /**
-   * Drop the cached size for the given resource and all of its ancestors
-   * (e.g. the pod root). Called when a write to the resource completes, so
-   * the next size query re-walks and reflects the new content.
-   */
+  /** Drop the cached size for the given resource and all of its ancestors. */
   public async invalidate(identifier: ResourceIdentifier): Promise<void> {
     try {
       const { filePath } = await this.fileIdentifierMapper.mapUrlToFilePath(identifier, false);
@@ -88,12 +78,10 @@ export class DuSizeReporter implements SizeReporter<unknown> {
     }
   }
 
-  /** The size of a chunk is simply its length in bytes. */
   public async calculateChunkSize(chunk: unknown): Promise<number> {
     return Buffer.isBuffer(chunk) ? chunk.length : Number((chunk as { length?: number }).length) || 0;
   }
 
-  /** The estimated size of a resource is simply the content-length header. */
   public async estimateSize(metadata: RepresentationMetadata): Promise<number | undefined> {
     return metadata.contentLength;
   }
@@ -126,10 +114,7 @@ export class DuSizeReporter implements SizeReporter<unknown> {
     return amount;
   }
 
-  /**
-   * Plain Node recursive walk — the same semantics as CSS's
-   * {@link FileSizeReporter.getTotalSize}. Used when no compatible `du` exists.
-   */
+  /** Plain Node recursive walk. Used when no compatible `du` exists. */
   private async computeTotalSizeWithNode(fileLocation: string): Promise<number> {
     let stat;
     try {
@@ -163,9 +148,6 @@ export class DuSizeReporter implements SizeReporter<unknown> {
       await execFileAsync('du', [ '--version' ], { timeout: 1000 });
       this.duFlavor = 'gnu';
     } catch (error: unknown) {
-      // ENOENT: no `du` at all (e.g. bare Windows). Anything else means the
-      // GNU long option was rejected → assume BSD; if BSD flags fail at use
-      // time, the caller falls back to the Node walk.
       const code = (error as { code?: string }).code;
       this.duFlavor = code === 'ENOENT' ? 'none' : 'bsd';
     }
@@ -174,18 +156,6 @@ export class DuSizeReporter implements SizeReporter<unknown> {
 
   /**
    * Convert the configured ignore-folder regexes into `du` exclude patterns.
-   * GNU/BSD `du` matches exclude patterns against path components/basenames
-   * (not against the full leading-slash path), so a regex like `^/\.internal$`
-   * becomes the exclude `.internal`.
-   *
-   * Only simple anchored folder patterns are convertible
-   * (`^/name$`); complex regexes that cannot be expressed as a du exclude are
-   * skipped here — the Node-walk fallback still applies them verbatim.
-   *
-   * Any-depth component patterns (e.g. `(^|/)\.internal$`) are also converted
-   * to a bare basename exclude, keeping the Node walk and `du` consistent for
-   * folders like `.internal` that may appear below the server root (e.g. a
-   * pod's own `/.internal/` quota sidecar).
    */
   private duExcludePatterns(): string[] {
     const patterns: string[] = [];

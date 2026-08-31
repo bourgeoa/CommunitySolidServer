@@ -12,13 +12,9 @@ import { discoverPod } from './PodDiscovery';
 import type { QuotaCounter } from './QuotaCounter';
 
 /**
- * Delta hook for design C. Wraps the top of the file accessor chain and, for
- * every mutation, computes the resource's apparent-byte delta (before/after)
+ * Wraps the top of the file accessor chain and, for every mutation,
+ * computes the resource's apparent-byte delta (before/after)
  * and feeds it to the {@link QuotaCounter}.
- *
- * Plugs into the existing chain untouched: this wrapper's `accessor` is the
- * original `FileDataAccessor` (FilterMetadata → Validating → Atomic), so the
- * quota validation and content-length filtering are preserved.
  *
  * Cases handled:
  * - create/overwrite document: Δ = new − old (data + metadata file)
@@ -86,9 +82,6 @@ export class QuotaDeltaDataAccessor extends PassthroughDataAccessor {
   // --- Delta tracking ---
 
   private async track(identifier: ResourceIdentifier, op: () => Promise<void>): Promise<void> {
-    // Skip the delta bookkeeping on CSS internal paths: the stat + pod-discovery
-    // walk + counter sidecar work can otherwise push internal writes (e.g. IDP
-    // authorization codes) past the WrappedExpiringReadWriteLocker's lock expiry.
     if (isInternalPath(identifier)) {
       await op();
       return;
@@ -100,9 +93,6 @@ export class QuotaDeltaDataAccessor extends PassthroughDataAccessor {
     if (pod === null) {
       return;
     }
-    // Always register the pod so the reporter routes its reads to the counter
-    // (even when this particular write has a zero delta, e.g. an empty
-    // container on a filesystem that reports directory size 0).
     await this.counter.register(pod);
     const delta = after - before;
     if (delta !== 0) {
@@ -145,7 +135,7 @@ export class QuotaDeltaDataAccessor extends PassthroughDataAccessor {
 
   private async discoverPod(identifier: ResourceIdentifier): Promise<ResourceIdentifier | null> {
     // Uses the metadata-before-root-container order so subdomain-mode pod
-    // roots are discovered (a subdomain pod root IS a root container).
+    // roots are discovered.
     return discoverPod(identifier, this.accessor, this.identifierStrategy);
   }
 }

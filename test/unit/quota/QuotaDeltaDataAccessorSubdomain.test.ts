@@ -60,7 +60,6 @@ function createAccessor(root: string): DataAccessor {
       return createReadStream(filePath) as any;
     },
     async getMetadata(identifier: ResourceIdentifier): Promise<RepresentationMetadata> {
-      // A subdomain pod root (ends with '/', is not the base root) is a storage.
       return meta(identifier.path.endsWith('/') && identifier.path !== BASE);
     },
     getChildren(): AsyncIterableIterator<any> {
@@ -126,22 +125,15 @@ describe('A QuotaDeltaDataAccessor in subdomain mode', (): void => {
 
   it('discovers subdomain pod roots and tracks deltas (regression: discovery must ' +
     'read metadata before the root-container stop).', async(): Promise<void> => {
-    // Create the pod root container. In subdomain mode the pod root IS a root
-    // container — discovery must read its metadata (pim:Storage) before the
-    // root-container stop, otherwise no pod is ever found (and no counter is
-    // created).
     await accessor.writeContainer(POD, {} as RepresentationMetadata);
     await expect(counter.isPodRoot(POD)).resolves.toBe(true);
 
-    // Create a document (100 bytes) inside the subdomain pod.
     await writeDoc(accessor, RESOURCE, 100);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root), POD));
 
-    // Overwrite it with a bigger body (150 bytes) → +50.
     await writeDoc(accessor, RESOURCE, 150);
     expect((await counter.getSize(POD)).amount).toBe(await expectedWalk(root, createMapper(root), POD));
 
-    // The sidecar is persisted per pod: <root>/alice/.internal/css-quota.json
     const sidecar = join(root, 'alice', '.internal', 'css-quota.json');
     await expect(fs.stat(sidecar)).resolves.toBeTruthy();
   });
