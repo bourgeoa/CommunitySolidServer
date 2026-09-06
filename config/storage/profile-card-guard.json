@@ -1,0 +1,40 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "comment": "Guards profile cards of registered WebIDs: keeping the `solid:oidcIssuer` triple.",
+  "@graph": [
+    {
+      "comment": "Guards from write and deletion of registered WebID profile cards.",
+      "@id": "urn:solid-server:default:ResourceStore_CardGuard",
+      "@type": "ProfileCardGuard",
+      "source": { "@id": "urn:solid-server:default:ResourceStore_Converting" },
+      "webIdStore": { "@id": "urn:solid-server:default:WebIdStore" },
+      "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" }
+    },
+    {
+      "comment": "Unguarded internal store used by account/WebID storage, so WebID lookups do not recurse through the public store.",
+      "@id": "urn:solid-server:default:ResourceStore_Internal",
+      "@type": "LockingResourceStore",
+      "source": { "@id": "urn:solid-server:default:ResourceStore_Converting" },
+      "locks": { "@id": "urn:solid-server:default:ResourceLocker" },
+      "auxiliaryStrategy": { "@id": "urn:solid-server:default:AuxiliaryStrategy" }
+    },
+    {
+      "comment": "Insert the card guard between the patch and conversion stores.",
+      "@type": "Override",
+      "overrideInstance": { "@id": "urn:solid-server:default:ResourceStore_Patching" },
+      "overrideParameters": {
+        "@type": "PatchingStore",
+        "source": { "@id": "urn:solid-server:default:ResourceStore_CardGuard" }
+      }
+    },
+    {
+      "comment": "Route the internal key-value storage through the unguarded internal store.",
+      "@type": "Override",
+      "overrideInstance": { "@id": "urn:solid-server:default:JsonResourceStorage" },
+      "overrideParameters": {
+        "@type": "JsonResourceStorage",
+        "source": { "@id": "urn:solid-server:default:ResourceStore_Internal" }
+      }
+    }
+  ]
+}
