@@ -1,0 +1,32 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Caches the credentials based on the incoming request.",
+      "@id": "urn:solid-server:default:CredentialsExtractor",
+      "@type": "CachedHandler",
+      "source": {
+        "comment": [
+          "Supports LWS access tokens, presented as Bearer tokens, or no credentials.",
+          "Requests with an invalid access token are rejected with a 401 response, as required by LWS, instead of being treated as unauthenticated."
+        ],
+        "@id": "urn:solid-server:default:WaterfallCredentialsExtractor",
+        "@type": "WaterfallHandler",
+        "handlers": [
+          {
+            "@id": "urn:solid-server:default:LwsAccessTokenExtractor",
+            "@type": "LwsAccessTokenExtractor",
+            "issuer": { "@id": "urn:solid-server:default:LwsAccessTokenIssuer" },
+            "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+            "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+            "skipWebIdTokens": false
+          },
+          {
+            "@id": "urn:solid-server:default:PublicCredentialsExtractor",
+            "@type": "PublicCredentialsExtractor"
+          }
+        ]
+      }
+    }
+  ]
+}

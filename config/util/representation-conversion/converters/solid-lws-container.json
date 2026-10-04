@@ -1,0 +1,23 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Converts containers to the LWS container representation, but only if application/lws+json or application/json is explicitly preferred. Other requests, including application/ld+json, receive the LDP representation Solid clients expect.",
+      "@id": "urn:solid-server:default:ContainerToLwsJsonConverter",
+      "@type": "ContainerToLwsJsonConverter",
+      "options_pageSize": 1000,
+      "options_strictPreferences": true,
+      "options_requireExplicit": true,
+      "options_outputPreferences": [
+        {
+          "ContainerToLwsJsonConverter:_options_outputPreferences_key": "application/lws+json",
+          "ContainerToLwsJsonConverter:_options_outputPreferences_value": 1
+        },
+        {
+          "ContainerToLwsJsonConverter:_options_outputPreferences_key": "application/json",
+          "ContainerToLwsJsonConverter:_options_outputPreferences_value": 1
+        }
+      ]
+    }
+  ]
+}

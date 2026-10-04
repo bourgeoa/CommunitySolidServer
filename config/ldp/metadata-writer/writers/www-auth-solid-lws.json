@@ -1,0 +1,13 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Adds the LWS WWW-Authenticate challenge on 401 responses. The scope parameter is required for the legacy solid-auth-client.",
+      "@id": "urn:solid-server:default:MetadataWriter_WwwAuth",
+      "@type": "LwsWwwAuthMetadataWriter",
+      "asUri": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+      "extraParameters": "scope=\"openid webid\""
+    }
+  ]
+}

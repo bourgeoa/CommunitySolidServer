@@ -3,6 +3,7 @@ export * from './authentication/BearerWebIdExtractor';
 export * from './authentication/Credentials';
 export * from './authentication/CredentialsExtractor';
 export * from './authentication/DPoPWebIdExtractor';
+export * from './authentication/LwsAccessTokenExtractor';
 export * from './authentication/PublicCredentialsExtractor';
 export * from './authentication/UnionCredentialsExtractor';
 export * from './authentication/UnsecureConstantCredentialsExtractor';
@@ -14,12 +15,19 @@ export * from './authorization/access/AgentAccessChecker';
 export * from './authorization/access/AgentClassAccessChecker';
 export * from './authorization/access/AgentGroupAccessChecker';
 
+// Authorization/LWS
+export * from './authorization/lws/AccessGrantIndex';
+export * from './authorization/lws/AccessGrantReader';
+export * from './authorization/lws/AccessGrantUtil';
+
 // Authorization/Permissions
 export * from './authorization/permissions/AclPermissionSet';
 export * from './authorization/permissions/CreateModesExtractor';
 export * from './authorization/permissions/DeleteParentExtractor';
 export * from './authorization/permissions/IntermediateCreateExtractor';
 export * from './authorization/permissions/ModesExtractor';
+export * from './authorization/permissions/RecursiveDeleteModesExtractor';
+export * from './authorization/permissions/JsonMergePatchModesExtractor';
 export * from './authorization/permissions/MethodModesExtractor';
 export * from './authorization/permissions/N3PatchModesExtractor';
 export * from './authorization/permissions/Permissions';
@@ -71,34 +79,45 @@ export * from './http/input/metadata/AuthorizationParser';
 export * from './http/input/metadata/ContentLengthParser';
 export * from './http/input/metadata/ContentTypeParser';
 export * from './http/input/metadata/CookieParser';
+export * from './http/input/metadata/DepthParser';
 export * from './http/input/metadata/LinkRelParser';
+export * from './http/input/metadata/LwsContainerTypeParser';
 export * from './http/input/metadata/MetadataParser';
 export * from './http/input/metadata/PlainJsonLdFilter';
 export * from './http/input/metadata/SlugParser';
 
 // HTTP/Input/Preferences
 export * from './http/input/preferences/AcceptPreferenceParser';
+export * from './http/input/preferences/LwsPagePreferenceParser';
 export * from './http/input/preferences/PreferenceParser';
 export * from './http/input/preferences/RangePreferenceParser';
+export * from './http/input/preferences/StaticTypePreferenceParser';
 export * from './http/input/preferences/UnionPreferenceParser';
 
 // HTTP/Input
 export * from './http/input/BasicRequestParser';
 export * from './http/input/RequestParser';
 
+// HTTP/LDP/LWS
+export * from './http/ldp/lws/AccessContainerInitializingHandler';
+export * from './http/ldp/lws/AccessDocumentOperationHandler';
+
 // HTTP/LDP
 export * from './http/ldp/DeleteOperationHandler';
 export * from './http/ldp/GetOperationHandler';
 export * from './http/ldp/HeadOperationHandler';
+export * from './http/ldp/NoContentOperationHandler';
 export * from './http/ldp/OperationHandler';
 export * from './http/ldp/PatchOperationHandler';
 export * from './http/ldp/PostOperationHandler';
 export * from './http/ldp/PutOperationHandler';
+export * from './http/ldp/RecursiveDeleteOperationHandler';
 
 // HTTP/Output/Error
 export * from './http/output/error/ConvertingErrorHandler';
 export * from './http/output/error/EmptyErrorHandler';
 export * from './http/output/error/ErrorHandler';
+export * from './http/output/error/FallbackErrorHandler';
 export * from './http/output/error/RedirectingErrorHandler';
 export * from './http/output/error/SafeErrorHandler';
 export * from './http/output/error/TargetExtractorErrorHandler';
@@ -110,6 +129,8 @@ export * from './http/output/metadata/ConstantMetadataWriter';
 export * from './http/output/metadata/ContentTypeMetadataWriter';
 export * from './http/output/metadata/CookieMetadataWriter';
 export * from './http/output/metadata/LinkRelMetadataWriter';
+export * from './http/output/metadata/LwsLinkMetadataWriter';
+export * from './http/output/metadata/LwsWwwAuthMetadataWriter';
 export * from './http/output/metadata/MappedMetadataWriter';
 export * from './http/output/metadata/MetadataWriter';
 export * from './http/output/metadata/ModifiedMetadataWriter';
@@ -120,6 +141,7 @@ export * from './http/output/metadata/WwwAuthMetadataWriter';
 
 // HTTP/Output/Response
 export * from './http/output/response/CreatedResponseDescription';
+export * from './http/output/response/NoContentResponseDescription';
 export * from './http/output/response/OkResponseDescription';
 export * from './http/output/response/ResetResponseDescription';
 export * from './http/output/response/ResponseDescription';
@@ -148,6 +170,17 @@ export * from './identity/configuration/IdentityProviderFactory';
 export * from './identity/configuration/JwkGenerator';
 export * from './identity/configuration/PromptFactory';
 export * from './identity/configuration/ProviderFactory';
+
+// Identity/LWS
+export * from './identity/lws/CidSubjectTokenVerifier';
+export * from './identity/lws/DidKeySubjectTokenVerifier';
+export * from './identity/lws/JwtCredentialUtil';
+export * from './identity/lws/LwsAccessTokenIssuer';
+export * from './identity/lws/LwsAuthorizationServerMetadataHttpHandler';
+export * from './identity/lws/LwsJwksHttpHandler';
+export * from './identity/lws/LwsTokenHttpHandler';
+export * from './identity/lws/OidcSubjectTokenVerifier';
+export * from './identity/lws/SubjectTokenVerifier';
 
 // Identity/Interaction/Account/Util
 export * from './identity/interaction/account/util/AccountUtil';
@@ -366,6 +399,10 @@ export * from './server/WebSocketHandler';
 export * from './server/WebSocketServerConfigurator';
 
 // Server/Description
+export * from './server/description/AccessServiceDescriber';
+export * from './server/description/LwsNotificationServiceDescriber';
+export * from './server/description/LwsStorageDescriber';
+export * from './server/description/LwsStorageDescriptionHandler';
 export * from './server/description/PodStorageLocationStrategy';
 export * from './server/description/RootStorageLocationStrategy';
 export * from './server/description/StaticStorageDescriber';
@@ -386,6 +423,14 @@ export * from './server/notifications/generate/AddRemoveNotificationGenerator';
 export * from './server/notifications/generate/DeleteNotificationGenerator';
 export * from './server/notifications/generate/NotificationGenerator';
 export * from './server/notifications/generate/StateNotificationGenerator';
+
+// Server/Notifications/LWS
+export * from './server/notifications/lws/HttpMessageSigner';
+export * from './server/notifications/lws/LwsNotificationListener';
+export * from './server/notifications/lws/LwsNotificationSender';
+export * from './server/notifications/lws/LwsSubscriptionHttpHandler';
+export * from './server/notifications/lws/LwsSubscriptionStorage';
+export * from './server/notifications/lws/WebhookLwsNotificationSender';
 
 // Server/Notifications/Serialize
 export * from './server/notifications/serialize/ConvertingNotificationSerializer';
@@ -460,16 +505,20 @@ export * from './storage/conditions/ETagHandler';
 export * from './storage/conversion/BaseTypedRepresentationConverter';
 export * from './storage/conversion/ChainedConverter';
 export * from './storage/conversion/ConstantConverter';
+export * from './storage/conversion/ContainerToLwsJsonConverter';
 export * from './storage/conversion/ContainerToTemplateConverter';
 export * from './storage/conversion/ContentTypeReplacer';
 export * from './storage/conversion/ConversionUtil';
 export * from './storage/conversion/DynamicJsonToTemplateConverter';
 export * from './storage/conversion/ErrorToJsonConverter';
+export * from './storage/conversion/ErrorToProblemJsonConverter';
 export * from './storage/conversion/ErrorToQuadConverter';
 export * from './storage/conversion/ErrorToTemplateConverter';
 export * from './storage/conversion/FormToJsonConverter';
+export * from './storage/conversion/LinksetMapper';
 export * from './storage/conversion/MarkdownToHtmlConverter';
 export * from './storage/conversion/PassthroughConverter';
+export * from './storage/conversion/QuadToLinksetConverter';
 export * from './storage/conversion/QuadToRdfConverter';
 export * from './storage/conversion/RdfToQuadConverter';
 export * from './storage/conversion/RepresentationConverter';
@@ -500,6 +549,8 @@ export * from './storage/mapping/SubdomainExtensionBasedMapper';
 // Storage/Patch
 export * from './storage/patch/ConvertingPatcher';
 export * from './storage/patch/ImmutableMetadataPatcher';
+export * from './storage/patch/JsonMergePatcher';
+export * from './storage/patch/LinksetMergePatcher';
 export * from './storage/patch/N3Patcher';
 export * from './storage/patch/PatchHandler';
 export * from './storage/patch/RdfPatcher';
@@ -533,6 +584,7 @@ export * from './storage/AtomicResourceStore';
 export * from './storage/BaseResourceStore';
 export * from './storage/BinarySliceResourceStore';
 export * from './storage/CachedResourceSet';
+export * from './storage/ContainerUtil';
 export * from './storage/DataAccessorBasedStore';
 export * from './storage/IndexRepresentationStore';
 export * from './storage/LockingResourceStore';
@@ -546,6 +598,8 @@ export * from './storage/ResourceStore';
 export * from './storage/RoutingResourceStore';
 
 // Util/Errors
+export * from './util/JsonMergePatch';
+export * from './util/LinksetUtil';
 export * from './util/errors/BadRequestHttpError';
 export * from './util/errors/ConflictHttpError';
 export * from './util/errors/ErrorUtil';
@@ -621,6 +675,7 @@ export * from './util/templates/TemplateUtil';
 
 // Util
 export * from './util/ContentTypes';
+export * from './util/DidKeyUtil';
 export * from './util/FetchUtil';
 export * from './util/GenericEventEmitter';
 export * from './util/GuardedStream';

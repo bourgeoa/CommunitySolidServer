@@ -1,0 +1,90 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Signs the LWS notifications with HTTP Message Signatures.",
+      "@id": "urn:solid-server:default:LwsNotificationSigner",
+      "@type": "HttpMessageSigner",
+      "jwkGenerator": {
+        "@type": "CachedJwkGenerator",
+        "alg": "ES256",
+        "storageKey": "lws-notification-jwks",
+        "storage": {
+          "@type": "ContainerPathStorage",
+          "relativePath": "/lws/notification-keys/",
+          "source": { "@id": "urn:solid-server:default:KeyValueStorage" }
+        }
+      }
+    },
+    {
+      "comment": "Delivers LWS notifications to inboxes.",
+      "@id": "urn:solid-server:default:LwsNotificationSender",
+      "@type": "WebhookLwsNotificationSender",
+      "signer": { "@id": "urn:solid-server:default:LwsNotificationSigner" }
+    },
+    {
+      "comment": "Stores the LWS webhook subscriptions.",
+      "@id": "urn:solid-server:default:LwsSubscriptionStorage",
+      "@type": "LwsSubscriptionStorage",
+      "storage": {
+        "comment": "A separate storage is used, as all subscriptions are read when the server starts.",
+        "@type": "JsonResourceStorage",
+        "source": { "@id": "urn:solid-server:default:ResourceStore" },
+        "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+        "container": "/.internal/lws/subscriptions/"
+      }
+    },
+    {
+      "comment": "Handles the LWS subscription endpoint.",
+      "@id": "urn:solid-server:default:LwsNotificationHttpHandler",
+      "@type": "RouterHandler",
+      "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+      "allowedPathNames": [ "^/\\.notifications/lws/" ],
+      "handler": {
+        "@type": "ParsingHttpHandler",
+        "requestParser": { "@id": "urn:solid-server:default:RequestParser" },
+        "errorHandler": { "@id": "urn:solid-server:default:ErrorHandler" },
+        "responseWriter": { "@id": "urn:solid-server:default:ResponseWriter" },
+        "operationHandler": {
+          "@type": "LwsSubscriptionHttpHandler",
+          "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+          "path": ".notifications/lws/",
+          "credentialsExtractor": { "@id": "urn:solid-server:default:CredentialsExtractor" },
+          "permissionReader": { "@id": "urn:solid-server:default:PermissionReader" },
+          "storage": { "@id": "urn:solid-server:default:LwsSubscriptionStorage" }
+        }
+      }
+    },
+    {
+      "comment": "Sends LWS notifications when resources change.",
+      "@id": "urn:solid-server:default:LwsNotificationListener",
+      "@type": "LwsNotificationListener",
+      "emitter": { "@id": "urn:solid-server:default:ResourceStore" },
+      "storage": { "@id": "urn:solid-server:default:LwsSubscriptionStorage" },
+      "permissionReader": { "@id": "urn:solid-server:default:PermissionReader" },
+      "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+      "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+      "sender": { "@id": "urn:solid-server:default:LwsNotificationSender" }
+    },
+    {
+      "comment": "The LwsNotificationListener is added to the list of Initializers so Components.js finds and instantiates it.",
+      "@id": "urn:solid-server:default:PrimaryParallelInitializer",
+      "@type": "ParallelHandler",
+      "handlers": [{ "@id": "urn:solid-server:default:LwsNotificationListener" }]
+    },
+    {
+      "comment": "Advertises the notification service and the signing key in the storage description.",
+      "@id": "urn:solid-server:default:LwsStorageDescriptionHandler",
+      "@type": "LwsStorageDescriptionHandler",
+      "describers": [
+        {
+          "@type": "LwsNotificationServiceDescriber",
+          "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+          "path": ".notifications/lws/",
+          "signer": { "@id": "urn:solid-server:default:LwsNotificationSigner" }
+        }
+      ]
+    }
+  ]
+}

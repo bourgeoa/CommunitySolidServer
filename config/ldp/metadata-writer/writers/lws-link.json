@@ -1,0 +1,14 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Adds the Link headers required by LWS: storage, up, type, and linkset.",
+      "@id": "urn:solid-server:default:MetadataWriter_LwsLink",
+      "@type": "LwsLinkMetadataWriter",
+      "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+      "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+      "auxiliaryStrategy": { "@id": "urn:solid-server:default:AuxiliaryStrategy" },
+      "linksetStrategy": { "@id": "urn:solid-server:default:MetadataStrategy" }
+    }
+  ]
+}

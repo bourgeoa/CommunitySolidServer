@@ -1,0 +1,10 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Interprets Link headers with the LWS Container type as requests to create a container.",
+      "@id": "urn:solid-server:default:LwsContainerTypeParser",
+      "@type": "LwsContainerTypeParser"
+    }
+  ]
+}

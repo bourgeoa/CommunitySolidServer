@@ -62,3 +62,12 @@ What to use for pod creation.
 * *dynamic*: Every created pod has its own Components.js config for its ResourceStore,
   which can differ from the others.
 * *static*: All pod data is stored in separate containers in the same ResourceStore.
+
+## LWS
+
+The Linked Web Storage authorization server.
+Exchanges authentication credentials for LWS access tokens using OAuth 2.0 Token Exchange.
+Its metadata can be found at `/.well-known/lws-configuration`.
+
+* *default*: Supports `did:key` credentials, self-issued credentials of agents with a controlled identifier document,
+  and OpenID Connect ID tokens, including those of Solid-OIDC identity providers.

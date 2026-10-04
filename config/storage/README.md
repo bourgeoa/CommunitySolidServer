@@ -40,3 +40,5 @@ The final store in this chain takes the store from the stores/backend config as 
 
 * *default*: Chains all the utility stores:
   Monitoring -> IndexRepresentation -> Locking -> Patching -> Converting
+* *lws*: Same as *default*, but the patching store also supports JSON Merge Patch on JSON resources,
+  and on linkset resources as required by Linked Web Storage.

@@ -208,6 +208,17 @@ export const LDP = createVocabulary(
   'Resource',
 );
 
+export const LWS = createVocabulary(
+  'https://www.w3.org/ns/lws#',
+  'storage',
+
+  'Container',
+  'DataResource',
+  'OpenIdProvider',
+  'Storage',
+  'StorageResource',
+);
+
 export const MA = createVocabulary(
   'http://www.w3.org/ns/ma-ont#',
   'format',
@@ -284,6 +295,8 @@ export const SOLID_ERROR = createVocabulary(
   'disallowedMethod',
   // Boolean value used to indicate that no response body should be returned for this error
   'emptyBody',
+  // The OAuth 2.0 error code of a failed bearer token validation, as used in the WWW-Authenticate header
+  'bearerError',
   'errorCode',
   'errorResponse',
   'stack',
@@ -302,6 +315,8 @@ export const SOLID_HTTP = createVocabulary(
   'accountCookie',
   // When the above cookie expires, expects an ISO date string
   'accountCookieExpiration',
+  // Set to `infinity` when the request has a `Depth: infinity` header
+  'depth',
   // Unit, start, and end are used for range headers
   'end',
   'location',

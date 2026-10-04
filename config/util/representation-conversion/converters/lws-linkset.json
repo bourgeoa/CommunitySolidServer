@@ -1,0 +1,20 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Maps between the RDF metadata of resources and LWS linksets.",
+      "@id": "urn:solid-server:default:LinksetMapper",
+      "@type": "LinksetMapper",
+      "metadataStrategy": { "@id": "urn:solid-server:default:MetadataIdentifierStrategy" },
+      "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+      "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" }
+    },
+    {
+      "comment": "Converts the metadata of a resource to an LWS linkset resource.",
+      "@id": "urn:solid-server:default:QuadToLinksetConverter",
+      "@type": "QuadToLinksetConverter",
+      "metadataStrategy": { "@id": "urn:solid-server:default:MetadataIdentifierStrategy" },
+      "mapper": { "@id": "urn:solid-server:default:LinksetMapper" }
+    }
+  ]
+}

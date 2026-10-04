@@ -6,6 +6,7 @@ import { RepresentationMetadata } from '../http/representation/RepresentationMet
 import type { Conditions } from '../storage/conditions/Conditions';
 import type { ETagHandler } from '../storage/conditions/ETagHandler';
 import { NotModifiedHttpError } from './errors/NotModifiedHttpError';
+import { PreconditionFailedHttpError } from './errors/PreconditionFailedHttpError';
 import { guardedStreamFrom } from './StreamUtil';
 import { toLiteral } from './TermUtil';
 import { CONTENT_TYPE_TERM, DC, HH, LDP, RDF, SOLID_META, XSD } from './Vocabularies';
@@ -70,9 +71,27 @@ export async function cloneRepresentation(representation: Representation): Promi
 }
 
 /**
+ * Determines whether the `If-Match` or `If-Unmodified-Since` part of the conditions fails,
+ * by evaluating a copy of the conditions without the `If-None-Match` and `If-Modified-Since` parts.
+ */
+function failsPreconditions(body: Representation, conditions: Conditions): boolean {
+  if (!conditions.matchesETag && !conditions.unmodifiedSince) {
+    return false;
+  }
+  const preconditions: Conditions = Object.assign(
+    Object.create(Object.getPrototypeOf(conditions) as object) as Conditions,
+    conditions,
+    { notMatchesETag: undefined, modifiedSince: undefined },
+  );
+  return !preconditions.matchesMetadata(body.metadata, true);
+}
+
+/**
  * Verify whether the given {@link Representation} matches the given conditions.
  * If true, add the corresponding ETag to the body metadata.
  * If not, destroy the data stream and throw a {@link NotModifiedHttpError} with the same ETag.
+ * In case the failing condition is an `If-Match` or `If-Unmodified-Since` condition,
+ * a {@link PreconditionFailedHttpError} is thrown instead, as required by RFC 9110, §13.1.
  * If `conditions` is not defined, nothing will happen.
  *
  * This uses the strict conditions check which takes the content type into account;
@@ -90,6 +109,9 @@ export function assertReadConditions(body: Representation, eTagHandler: ETagHand
   const eTag = eTagHandler.getETag(body.metadata);
   if (conditions && !conditions.matchesMetadata(body.metadata, true)) {
     body.data.destroy();
+    if (failsPreconditions(body, conditions)) {
+      throw new PreconditionFailedHttpError();
+    }
     const error = new NotModifiedHttpError(eTag);
 
     // From RFC 9111:

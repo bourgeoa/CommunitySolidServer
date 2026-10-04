@@ -1,0 +1,44 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Keeps track of the LWS access grants, which are stored in the access grant container of every storage.",
+      "@id": "urn:solid-server:default:AccessGrantIndex",
+      "@type": "AccessGrantIndex",
+      "store": { "@id": "urn:solid-server:default:ResourceStore" },
+      "emitter": { "@id": "urn:solid-server:default:ResourceStore" },
+      "grantPath": ".lws/grants/"
+    },
+    {
+      "comment": "Grants the permissions described by the LWS access grants. Applies to all resources except the internal ones.",
+      "@id": "urn:solid-server:default:PathBasedReader",
+      "@type": "PathBasedReader",
+      "paths": [
+        {
+          "PathBasedReader:_paths_key": "^/(?!\\.internal(/|$)).*",
+          "PathBasedReader:_paths_value": {
+            "@id": "urn:solid-server:default:AccessGrantReader",
+            "@type": "AccessGrantReader",
+            "index": { "@id": "urn:solid-server:default:AccessGrantIndex" },
+            "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+            "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+            "store": { "@id": "urn:solid-server:default:ResourceStore" },
+            "requestPath": ".lws/requests/"
+          }
+        }
+      ]
+    },
+    {
+      "comment": "Advertises the access request and access grant containers in the storage description.",
+      "@id": "urn:solid-server:default:LwsStorageDescriptionHandler",
+      "@type": "LwsStorageDescriptionHandler",
+      "describers": [
+        {
+          "@type": "AccessServiceDescriber",
+          "grantPath": ".lws/grants/",
+          "requestPath": ".lws/requests/"
+        }
+      ]
+    }
+  ]
+}

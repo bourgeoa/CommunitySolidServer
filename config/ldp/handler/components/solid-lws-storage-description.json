@@ -1,0 +1,13 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Serves the LWS storage description on the storage URI, which is the URI of the storage root container. Only requests without Accept header, or that explicitly prefer application/lws+cid, receive the storage description, so Solid clients keep receiving the root container.",
+      "@id": "urn:solid-server:default:LwsStorageDescriptionHandler",
+      "@type": "LwsStorageDescriptionHandler",
+      "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+      "resourceSet": { "@id": "urn:solid-server:default:CachedResourceSet" },
+      "wildcardDescribes": false
+    }
+  ]
+}

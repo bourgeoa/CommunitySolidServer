@@ -92,6 +92,7 @@ nav:
       - Client credentials: usage/client-credentials.md
       - Seeding pods: usage/seeding-pods.md
       - Notifications: usage/notifications.md
+      - Linked Web Storage: usage/linked-web-storage.md
       - Development server: usage/dev-configuration.md
       - Adding a new CLI parameter: usage/new-cli-parameter.md
       - Authorization methods: usage/authorization-methods.md

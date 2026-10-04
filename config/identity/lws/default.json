@@ -1,0 +1,93 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "The LWS authorization server of this server. Its identifier is the base URL of the server.",
+      "@id": "urn:solid-server:default:LwsAccessTokenIssuer",
+      "@type": "LwsAccessTokenIssuer",
+      "issuer": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "jwkGenerator": {
+        "comment": "The key used to sign LWS access tokens.",
+        "@id": "urn:solid-server:default:LwsJwkGenerator",
+        "@type": "CachedJwkGenerator",
+        "alg": "ES256",
+        "storageKey": "lws-jwks",
+        "storage": {
+          "@id": "urn:solid-server:default:LwsKeyStorage",
+          "@type": "ContainerPathStorage",
+          "relativePath": "/lws/keys/",
+          "source": { "@id": "urn:solid-server:default:KeyValueStorage" }
+        }
+      },
+      "lifetime": 300
+    },
+    {
+      "comment": "Validates the subject tokens presented at the token endpoint, one handler per supported LWS authentication suite.",
+      "@id": "urn:solid-server:default:SubjectTokenVerifier",
+      "@type": "WaterfallHandler",
+      "handlers": [
+        {
+          "comment": "LWS 1.0 Authentication Suite: Self-signed Identifiers using did:key.",
+          "@type": "DidKeySubjectTokenVerifier"
+        },
+        {
+          "comment": "LWS 1.0 Authentication Suite: Self-issued Identity using Controlled Identifiers.",
+          "@type": "CidSubjectTokenVerifier"
+        },
+        {
+          "comment": "LWS 1.0 Authentication Suite: OpenID Connect. Also accepts ID tokens of Solid-OIDC identity providers, which are linked from WebID documents with solid:oidcIssuer.",
+          "@type": "OidcSubjectTokenVerifier",
+          "converter": { "@id": "urn:solid-server:default:RepresentationConverter" },
+          "trustedIssuers": [{ "@id": "urn:solid-server:default:variable:baseUrl" }],
+          "additionalAudiences": [ "solid" ],
+          "acceptSolidOidcIssuer": true
+        }
+      ]
+    },
+    {
+      "comment": "The endpoints of the LWS authorization server: the metadata, the token endpoint, and the JWKS.",
+      "@id": "urn:solid-server:default:LwsAuthorizationServerHandler",
+      "@type": "WaterfallHandler",
+      "handlers": [
+        {
+          "@type": "RouterHandler",
+          "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+          "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+          "allowedMethods": [ "GET", "HEAD" ],
+          "allowedPathNames": [ "^/\\.well-known/lws-configuration$" ],
+          "handler": {
+            "@type": "LwsAuthorizationServerMetadataHttpHandler",
+            "issuer": { "@id": "urn:solid-server:default:LwsAccessTokenIssuer" },
+            "tokenPath": ".well-known/lws/token",
+            "jwksPath": ".well-known/lws/jwks"
+          }
+        },
+        {
+          "@type": "RouterHandler",
+          "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+          "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+          "allowedMethods": [ "POST" ],
+          "allowedPathNames": [ "^/\\.well-known/lws/token$" ],
+          "handler": {
+            "@type": "LwsTokenHttpHandler",
+            "issuer": { "@id": "urn:solid-server:default:LwsAccessTokenIssuer" },
+            "verifier": { "@id": "urn:solid-server:default:SubjectTokenVerifier" },
+            "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+            "resourceSet": { "@id": "urn:solid-server:default:CachedResourceSet" }
+          }
+        },
+        {
+          "@type": "RouterHandler",
+          "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+          "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+          "allowedMethods": [ "GET", "HEAD" ],
+          "allowedPathNames": [ "^/\\.well-known/lws/jwks$" ],
+          "handler": {
+            "@type": "LwsJwksHttpHandler",
+            "issuer": { "@id": "urn:solid-server:default:LwsAccessTokenIssuer" }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -45,6 +45,12 @@ When a new content type needs to be supported, this can be done by adding a corr
 to the ChainedConverter list.
 
 * *default*: The default conversion setup which supports most RDF formats.
+* *lws*: Also supports the Linked Web Storage container representation (`application/lws+json`),
+  which is also returned for `application/ld+json` and `application/json` requests on containers,
+  and the `application/linkset+json` representation of metadata resources.
+* *solid-lws*: Same as *lws*, but containers are only represented as `application/lws+json`
+  when that media type, or `application/json`, is explicitly requested.
+  Solid clients requesting `application/ld+json` keep receiving the LDP representation.
 
 ## Resource-locker
 

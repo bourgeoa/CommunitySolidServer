@@ -1,6 +1,11 @@
 // Well-known content types
 export const APPLICATION_JSON = 'application/json';
 export const APPLICATION_LD_JSON = 'application/ld+json';
+export const APPLICATION_LINKSET_JSON = 'application/linkset+json';
+export const APPLICATION_LWS_CID = 'application/lws+cid';
+export const APPLICATION_LWS_JSON = 'application/lws+json';
+export const APPLICATION_PROBLEM_JSON = 'application/problem+json';
+export const APPLICATION_MERGE_PATCH_JSON = 'application/merge-patch+json';
 export const APPLICATION_OCTET_STREAM = 'application/octet-stream';
 export const APPLICATION_SPARQL_UPDATE = 'application/sparql-update';
 export const APPLICATION_X_WWW_FORM_URLENCODED = 'application/x-www-form-urlencoded';

@@ -273,6 +273,22 @@ describe('A DataAccessorBasedStore', (): void => {
       ]);
     });
 
+    it('copies the modification date of the subject to metadata resources.', async(): Promise<void> => {
+      const resourceID = { path: `${root}resource` };
+      const metaResourceID = { path: `${root}resource.meta` };
+      representation.metadata.identifier = namedNode(resourceID.path);
+      representation.metadata.add(DC.terms.modified, literal(now.toISOString(), XSD.terms.dateTime));
+
+      accessor.data[resourceID.path] = representation;
+
+      const result = await store.getRepresentation(metaResourceID);
+      expect(result.metadata.identifier.value).toBe(metaResourceID.path);
+      expect(result.metadata.get(DC.terms.modified)).toEqualRdfTerm(
+        literal(now.toISOString(), XSD.terms.dateTime),
+      );
+      expect(result.metadata.quads(null, DC.terms.modified, null, SOLID_META.terms.ResponseMetadata)).toHaveLength(1);
+    });
+
     it('will return the generated representation for container metadata resources.', async(): Promise<void> => {
       const metaResourceID = { path: `${root}.meta` };
 
@@ -789,6 +805,19 @@ describe('A DataAccessorBasedStore', (): void => {
       const resourceID = { path: `${root}notHere` };
       await expect(store.modifyResource(resourceID, representation, failingConditions))
         .rejects.toThrow(PreconditionFailedHttpError);
+    });
+
+    it('evaluates the conditions of metadata resources against the subject resource.', async(): Promise<void> => {
+      const resourceID = { path: `${root}resource` };
+      representation.metadata.identifier = namedNode(resourceID.path);
+      accessor.data[resourceID.path] = representation;
+      const conditions: Conditions = { matchesMetadata: jest.fn().mockReturnValue(false) };
+
+      await expect(store.modifyResource({ path: `${root}resource.meta` }, representation, conditions))
+        .rejects.toThrow(PreconditionFailedHttpError);
+      expect(conditions.matchesMetadata).toHaveBeenCalledTimes(1);
+      const metadata = jest.mocked(conditions.matchesMetadata).mock.calls[0][0]!;
+      expect(metadata.identifier.value).toBe(resourceID.path);
     });
 
     it('re-throws the error if something goes wrong accessing the metadata.', async(): Promise<void> => {

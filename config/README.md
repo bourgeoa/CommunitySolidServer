@@ -121,6 +121,31 @@ to serve data from different backends depending on the URL that is used.
 In this example, all data in the `/sparql/` container will be stored in a SPARQL backend,
 and similarly for `/memory/` and `/file/`.
 
+## lws.json
+
+A configuration that serves the [Linked Web Storage](https://w3c.github.io/lws-protocol/lws10-core/) (LWS) protocol,
+with the same setup as `file.json`.
+Every pod is an LWS storage. Clients obtain access tokens from the LWS authorization server of the server,
+which accepts `did:key` credentials, self-issued controlled identifier credentials,
+and the ID tokens of OpenID providers, such as the identity provider of the server.
+WAC is used for authorization.
+More information can be found in the [documentation](https://communitysolidserver.github.io/CommunitySolidServer/latest/usage/linked-web-storage/).
+
+## lws-acp.json
+
+The only difference with `lws.json` is that this uses ACP for authorization instead of WAC.
+
+## solid-lws.json
+
+A configuration that serves both the Solid Protocol and the Linked Web Storage protocol,
+with the same setup as `file.json`, so clients implementing either protocol can use the server.
+When the two protocols conflict, the Solid behaviour is kept for requests that do not explicitly ask for LWS.
+WAC is used for authorization.
+
+## solid-lws-acp.json
+
+The only difference with `solid-lws.json` is that this uses ACP for authorization instead of WAC.
+
 ## oidc.json
 
 A configuration that sets up the server to only function as an Identity Provider.

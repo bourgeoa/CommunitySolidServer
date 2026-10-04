@@ -8,6 +8,7 @@ Sets up all the handlers a request will potentially pass through.
 
 * *default*: The full setup, that is middleware + static files + IDP + LDP.
 * *simple*: A simpler setup in which the IDP is disabled.
+* *lws*: Same as *default*, but also includes the Linked Web Storage authorization server endpoints.
 
 ## Middleware
 
