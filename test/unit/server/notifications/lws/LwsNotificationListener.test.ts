@@ -233,7 +233,7 @@ describe('A LwsNotificationListener', (): void => {
   });
 
   it('resets the failure count after a successful delivery.', async(): Promise<void> => {
-    emitter.removeAllListeners();
+    emitter.removeAllListeners('changed');
     createListener(2);
     sender.handleSafe.mockRejectedValueOnce(new Error('failed'));
     await emit(resource, AS.terms.Update);
