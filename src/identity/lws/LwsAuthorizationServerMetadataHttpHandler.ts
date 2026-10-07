@@ -28,7 +28,7 @@ export interface LwsAuthorizationServerMetadataHttpHandlerArgs {
    */
   subjectTokenTypes?: string[];
   /**
-   * The supported subject identifier types. Defaults to `https` and `did:key`.
+   * The supported subject identifier types. Defaults to `https`, `did:key`, and `did:web`.
    */
   subjectIdentifierTypes?: string[];
 }
@@ -55,7 +55,7 @@ export class LwsAuthorizationServerMetadataHttpHandler extends HttpHandler {
       response_types_supported: [ 'token' ],
       claims_supported: [ 'sub', 'iss', 'client_id', 'aud', 'exp', 'iat', 'jti' ],
       subject_token_types_supported: args.subjectTokenTypes ?? [ TOKEN_TYPE_JWT, TOKEN_TYPE_ID_TOKEN ],
-      subject_identifier_types_supported: args.subjectIdentifierTypes ?? [ 'https', 'did:key' ],
+      subject_identifier_types_supported: args.subjectIdentifierTypes ?? [ 'https', 'did:key', 'did:web' ],
     });
   }
 

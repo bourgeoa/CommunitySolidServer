@@ -34,7 +34,7 @@ describe('An LwsAuthorizationServerMetadataHttpHandler', (): void => {
       response_types_supported: [ 'token' ],
       claims_supported: [ 'sub', 'iss', 'client_id', 'aud', 'exp', 'iat', 'jti' ],
       subject_token_types_supported: [ TOKEN_TYPE_JWT, TOKEN_TYPE_ID_TOKEN ],
-      subject_identifier_types_supported: [ 'https', 'did:key' ],
+      subject_identifier_types_supported: [ 'https', 'did:key', 'did:web' ],
     });
   });
 

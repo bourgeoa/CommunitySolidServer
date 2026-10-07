@@ -174,6 +174,7 @@ export * from './identity/configuration/ProviderFactory';
 // Identity/LWS
 export * from './identity/lws/CidSubjectTokenVerifier';
 export * from './identity/lws/DidKeySubjectTokenVerifier';
+export * from './identity/lws/DidWebSubjectTokenVerifier';
 export * from './identity/lws/JwtCredentialUtil';
 export * from './identity/lws/LwsAccessTokenIssuer';
 export * from './identity/lws/LwsAuthorizationServerMetadataHttpHandler';
@@ -676,6 +677,7 @@ export * from './util/templates/TemplateUtil';
 // Util
 export * from './util/ContentTypes';
 export * from './util/DidKeyUtil';
+export * from './util/DidWebUtil';
 export * from './util/FetchUtil';
 export * from './util/GenericEventEmitter';
 export * from './util/GuardedStream';

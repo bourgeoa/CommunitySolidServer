@@ -76,6 +76,12 @@ The following authentication suites are supported:
 * Self-signed `did:key` credentials (`urn:ietf:params:oauth:token-type:jwt`).
 * Self-issued credentials of agents with an HTTPS identifier,
   whose controlled identifier document contains the verification key (`urn:ietf:params:oauth:token-type:jwt`).
+* Self-issued credentials of agents with a [`did:web`](https://w3c-ccg.github.io/did-method-web/) identifier,
+  whose DID document contains the verification key (`urn:ietf:params:oauth:token-type:jwt`).
+  The document is retrieved from `https://<host>/.well-known/did.json`,
+  or from `https://<host>/<path>/did.json` for identifiers with a path.
+  The agent of such a credential keeps its `did:web` identifier:
+  it is not automatically equivalent to a WebID or another identifier of the same agent.
 * OpenID Connect ID tokens (`urn:ietf:params:oauth:token-type:id_token`).
   The controlled identifier document of the subject needs to contain an `https://www.w3.org/ns/lws#OpenIdProvider` service
   pointing to the issuer.
@@ -84,7 +90,7 @@ The following authentication suites are supported:
 
 The resulting access tokens are presented as `Bearer` tokens.
 The agent in the access token is used as the WebID in WAC and ACP policies,
-so access can be granted to a `did:key` identifier the same way as to a WebID.
+so access can be granted to a `did:key` or `did:web` identifier the same way as to a WebID.
 
 In the dual configurations, Solid-OIDC DPoP and Bearer tokens are also accepted.
 Bearer tokens that have a `webid` claim are treated as Solid-OIDC tokens.

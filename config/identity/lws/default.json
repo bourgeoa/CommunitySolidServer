@@ -31,6 +31,10 @@
           "@type": "DidKeySubjectTokenVerifier"
         },
         {
+          "comment": "Self-issued credentials of agents identified by a did:web URI, whose DID document contains the verification key.",
+          "@type": "DidWebSubjectTokenVerifier"
+        },
+        {
           "comment": "LWS 1.0 Authentication Suite: Self-issued Identity using Controlled Identifiers.",
           "@type": "CidSubjectTokenVerifier"
         },
