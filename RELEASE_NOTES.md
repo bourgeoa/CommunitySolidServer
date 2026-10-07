@@ -6,7 +6,7 @@
 
 - Expiring read/write lockers can enforce an optional maximum hold duration,
   independent of activity-based lock renewals.
-- Accounts can now recover the profile document of a WebID linked to the account and
+- An account can now recover the profile document of a WebID linked to the account and
   hosted in one of its pods: the server first creates a backup of the current profile
   document, and then rewrites the original profile document and its authorization the
   same way as when the pod was created.
