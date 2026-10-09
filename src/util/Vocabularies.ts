@@ -272,6 +272,15 @@ export const RDFS = createVocabulary(
   'label',
 );
 
+export const SEC = createVocabulary(
+  'https://w3id.org/security#',
+  'assertionMethod',
+  'authentication',
+  'controller',
+  'publicKeyJwk',
+  'verificationMethod',
+);
+
 export const SOLID = createVocabulary(
   'http://www.w3.org/ns/solid/terms#',
   'deletes',

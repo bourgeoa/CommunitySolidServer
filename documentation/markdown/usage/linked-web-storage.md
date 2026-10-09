@@ -76,6 +76,11 @@ The following authentication suites are supported:
 * Self-signed `did:key` credentials (`urn:ietf:params:oauth:token-type:jwt`).
 * Self-issued credentials of agents with an HTTPS identifier,
   whose controlled identifier document contains the verification key (`urn:ietf:params:oauth:token-type:jwt`).
+  The document can be a controlled identifier document in JSON, or an RDF document such as a WebID profile:
+  the latter is a document about the subject, so it can state the verification method of the agent.
+  The document needs to be publicly readable, since the server dereferences it without credentials.
+  A WebID credential thus results in an access token for that WebID,
+  like an ID token of an OpenID Connect provider designated by the WebID.
 * OpenID Connect ID tokens (`urn:ietf:params:oauth:token-type:id_token`).
   The controlled identifier document of the subject needs to contain an `https://www.w3.org/ns/lws#OpenIdProvider` service
   pointing to the issuer.

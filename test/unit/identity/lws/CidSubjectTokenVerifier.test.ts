@@ -3,10 +3,28 @@ import type { JWK, KeyLike } from 'jose';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { CidSubjectTokenVerifier } from '../../../../src/identity/lws/CidSubjectTokenVerifier';
 import { TOKEN_TYPE_ID_TOKEN, TOKEN_TYPE_JWT } from '../../../../src/identity/lws/SubjectTokenVerifier';
+import { RdfToQuadConverter } from '../../../../src/storage/conversion/RdfToQuadConverter';
 import { BadRequestHttpError } from '../../../../src/util/errors/BadRequestHttpError';
 import { NotImplementedHttpError } from '../../../../src/util/errors/NotImplementedHttpError';
+import { SEC } from '../../../../src/util/Vocabularies';
 
 jest.mock('cross-fetch');
+
+interface MockResponse {
+  status: number;
+  url: string;
+  headers: { get: (name: string) => string | null };
+  text: () => Promise<string>;
+}
+
+function mockResponse(body: string, contentType?: string, status = 200, url = ''): MockResponse {
+  return {
+    status,
+    url,
+    headers: { get: (name: string): string | null => name === 'content-type' ? contentType ?? null : null },
+    text: async(): Promise<string> => body,
+  };
+}
 
 function encode(value: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -23,6 +41,7 @@ describe('A CidSubjectTokenVerifier', (): void => {
   const kid = '#key-1';
   const keyId = `${subject}#key-1`;
   const claims = { sub: subject, iss: subject, client_id: subject };
+  const converter = new RdfToQuadConverter();
   let privateKey: KeyLike;
   let publicJwk: JWK;
   let document: Record<string, unknown>;
@@ -35,6 +54,18 @@ describe('A CidSubjectTokenVerifier', (): void => {
       .setIssuedAt(iat)
       .setExpirationTime('5m')
       .sign(privateKey);
+  }
+
+  /**
+   * A WebID profile is RDF, and a server can return it in a form other than the stored one.
+   */
+  function profile(statements: string): void {
+    fetchMock.mockResolvedValueOnce(mockResponse(
+      `@prefix sec: <${SEC.namespace}>. ${statements}`,
+      'text/turtle',
+      200,
+      subject,
+    ));
   }
 
   beforeAll(async(): Promise<void> => {
@@ -56,8 +87,8 @@ describe('A CidSubjectTokenVerifier', (): void => {
     };
     fetchMock.mockReset();
     fetchMock.mockImplementation(async(): Promise<unknown> =>
-      ({ status: 200, json: async(): Promise<unknown> => document }));
-    verifier = new CidSubjectTokenVerifier();
+      mockResponse(JSON.stringify(document), 'application/json'));
+    verifier = new CidSubjectTokenVerifier({ converter });
   });
 
   describe('#canHandle', (): void => {
@@ -140,10 +171,17 @@ describe('A CidSubjectTokenVerifier', (): void => {
 
     it('errors if the document is not a controlled identifier document of the subject.', async(): Promise<void> => {
       const token = await sign(claims);
-      fetchMock.mockResolvedValueOnce({ status: 200, json: async(): Promise<unknown> => [ document ]});
+      fetchMock.mockResolvedValueOnce(mockResponse(JSON.stringify([ document ]), 'application/json'));
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
         .rejects.toThrow(`${subject} is not a valid controlled identifier document.`);
       document.id = 'https://other.example/id';
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`${subject} is not a valid controlled identifier document.`);
+    });
+
+    it('errors if the document has no content type.', async(): Promise<void> => {
+      fetchMock.mockResolvedValueOnce(mockResponse(JSON.stringify(document)));
+      const token = await sign(claims);
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
         .rejects.toThrow(`${subject} is not a valid controlled identifier document.`);
     });
@@ -180,9 +218,123 @@ describe('A CidSubjectTokenVerifier', (): void => {
       const token = await sign(claims, { kid }, Math.floor(Date.now() / 1000) + 120);
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
         .rejects.toThrow('the iat claim is in the future');
-      verifier = new CidSubjectTokenVerifier(300);
+      verifier = new CidSubjectTokenVerifier({ converter, clockTolerance: 300 });
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
         .resolves.toEqual({ subject, issuer: subject, client: subject });
+    });
+
+    describe('with an RDF document', (): void => {
+      it('resolves the key of a WebID profile.', async(): Promise<void> => {
+        profile(`
+          <${subject}> sec:verificationMethod <${keyId}>.
+          <${keyId}> sec:publicKeyJwk """${JSON.stringify(publicJwk)}""".
+        `);
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .resolves.toEqual({ subject, issuer: subject, client: subject });
+      });
+
+      it('resolves the key of a profile that was converted to JSON-LD.', async(): Promise<void> => {
+        // The form in which a server can return a stored profile
+        fetchMock.mockResolvedValueOnce(mockResponse(JSON.stringify([
+          {
+            '@id': subject,
+            [`${SEC.namespace}authentication`]: [{ '@id': keyId }],
+            [`${SEC.namespace}verificationMethod`]: [{ '@id': keyId }],
+          },
+          {
+            '@id': keyId,
+            [`${SEC.namespace}controller`]: [{ '@id': subject }],
+            [`${SEC.namespace}publicKeyJwk`]: [{ '@value': JSON.stringify(publicJwk) }],
+          },
+        ]), 'application/ld+json', 200, subject));
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .resolves.toEqual({ subject, issuer: subject, client: subject });
+      });
+
+      it('resolves the key from the authentication relationship.', async(): Promise<void> => {
+        profile(`
+          <${subject}> sec:authentication <${keyId}>.
+          <${keyId}> sec:publicKeyJwk """${JSON.stringify(publicJwk)}""".
+        `);
+        const token = await sign(claims, { kid: keyId });
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .resolves.toEqual({ subject, issuer: subject, client: subject });
+      });
+
+      it('rejects a profile whose key is controlled by someone else.', async(): Promise<void> => {
+        profile(`
+          <${subject}> sec:verificationMethod <${keyId}>.
+          <${keyId}> sec:controller <https://other.example/#me>.
+          <${keyId}> sec:publicKeyJwk """${JSON.stringify(publicJwk)}""".
+        `);
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .rejects.toThrow(`The verification method ${keyId} is not controlled by ${subject}.`);
+      });
+
+      it('rejects a profile without the verification method.', async(): Promise<void> => {
+        profile(`
+          <${subject}> <https://www.w3.org/ns/solid/terms#oidcIssuer> <https://idp.example/>.
+          <${subject}> sec:verificationMethod <${subject}#other>.
+        `);
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .rejects.toThrow(`${subject} has no verification method ${keyId}.`);
+      });
+
+      it('rejects a profile that states the method about another subject.', async(): Promise<void> => {
+        profile(`
+          <https://other.example/#me> sec:verificationMethod <${keyId}>.
+          <${keyId}> sec:publicKeyJwk """${JSON.stringify(publicJwk)}""".
+        `);
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .rejects.toThrow(`${subject} has no verification method ${keyId}.`);
+      });
+
+      it('rejects a verification method without a public key.', async(): Promise<void> => {
+        profile(`
+          <${subject}> sec:verificationMethod <${keyId}>.
+          <${keyId}> sec:controller <${subject}>.
+        `);
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .rejects.toThrow(`${subject} has no verification method ${keyId}.`);
+      });
+
+      it('rejects a profile whose key is not a JSON Web Key.', async(): Promise<void> => {
+        profile(`
+          <${subject}> sec:verificationMethod <${keyId}>.
+          <${keyId}> sec:publicKeyJwk "not a key".
+        `);
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .rejects.toThrow(`${subject} has no verification method ${keyId}.`);
+      });
+
+      it('rejects a document that can not be parsed as RDF.', async(): Promise<void> => {
+        profile('<a> <b> "c');
+        const token = await sign(claims);
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .rejects.toThrow(`${subject} is not a valid controlled identifier document.`);
+      });
+
+      it('resolves the key of a WebID that has a fragment.', async(): Promise<void> => {
+        // A WebID is the subject, so its fragment is not part of the identifier of the verification method
+        const webId = `${subject}#me`;
+        fetchMock.mockResolvedValueOnce(mockResponse(
+          `@prefix sec: <${SEC.namespace}>. <#me> sec:verificationMethod <#key-1>.
+           <#key-1> sec:publicKeyJwk """${JSON.stringify(publicJwk)}""".`,
+          'text/turtle',
+          200,
+          subject,
+        ));
+        const token = await sign({ sub: webId, iss: webId, client_id: webId });
+        await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+          .resolves.toEqual({ subject: webId, issuer: webId, client: webId });
+      });
     });
   });
 });
