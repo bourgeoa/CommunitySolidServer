@@ -30,7 +30,7 @@ describe('A RecursiveDeleteModesExtractor', (): void => {
     };
     operation.body.metadata.set(SOLID_HTTP.terms.depth, 'infinity');
 
-    sourceMap = new IdentifierSetMultiMap([[ target, AccessMode.delete ]]);
+    sourceMap = new IdentifierSetMultiMap<AccessMode>([[ target, AccessMode.delete ]]);
     source = {
       canHandle: jest.fn(),
       handle: jest.fn().mockResolvedValue(sourceMap),
