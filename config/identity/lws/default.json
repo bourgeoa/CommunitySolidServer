@@ -31,9 +31,11 @@
           "@type": "DidKeySubjectTokenVerifier"
         },
         {
-          "comment": "LWS 1.0 Authentication Suite: Self-issued Identity using Controlled Identifiers. Also accepts RDF documents such as WebID profiles, which can carry the verification method of the agent.",
+          "comment": "LWS 1.0 Authentication Suite: Self-issued Identity using Controlled Identifiers. Also accepts RDF documents such as WebID profiles, which can carry the verification method of the agent. Keys that are registered for a subject are authoritative; its document is only retrieved if that is explicitly enabled.",
           "@type": "CidSubjectTokenVerifier",
-          "converter": { "@id": "urn:solid-server:default:RepresentationConverter" }
+          "converter": { "@id": "urn:solid-server:default:RepresentationConverter" },
+          "keys": { "@id": "urn:solid-server:default:IdentityKeyStore" },
+          "documentFetch": false
         },
         {
           "comment": "LWS 1.0 Authentication Suite: OpenID Connect. Also accepts ID tokens of Solid-OIDC identity providers, which are linked from WebID documents with solid:oidcIssuer.",

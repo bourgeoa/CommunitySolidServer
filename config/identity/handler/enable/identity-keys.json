@@ -1,0 +1,23 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Enable the registration of identity keys, which allows an agent to authenticate with a self-issued credential while its controlled identifier document is not retrievable by this server."
+    },
+
+    {
+      "@id": "urn:solid-server:default:InteractionRouteHandler",
+      "@type": "WaterfallHandler",
+      "handlers": [{ "@id": "urn:solid-server:default:AccountIdentityKeyRouter" }]
+    },
+
+    {
+      "@id": "urn:solid-server:default:AccountControlHandler",
+      "@type": "ControlHandler",
+      "controls": [{
+        "ControlHandler:_controls_key": "identityKeys",
+        "ControlHandler:_controls_value": { "@id": "urn:solid-server:default:AccountIdentityKeyRoute" }
+      }]
+    }
+  ]
+}

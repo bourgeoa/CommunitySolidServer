@@ -17,7 +17,8 @@
         "source": {
           "@type": "UnlinkWebIdHandler",
           "webIdRoute": { "@id": "urn:solid-server:default:AccountWebIdLinkRoute" },
-          "webIdStore": { "@id": "urn:solid-server:default:WebIdStore" }
+          "webIdStore": { "@id": "urn:solid-server:default:WebIdStore" },
+          "keyStore": { "@id": "urn:solid-server:default:IdentityKeyStore" }
         }
       }
     },

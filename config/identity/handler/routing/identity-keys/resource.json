@@ -1,0 +1,27 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Handles the removal of a registered identity key.",
+      "@id": "urn:solid-server:default:AccountIdentityKeyIdRouter",
+      "@type": "AuthorizedRouteHandler",
+      "route": {
+        "@id": "urn:solid-server:default:AccountIdentityKeyIdRoute",
+        "@type": "BaseIdentityKeyIdRoute",
+        "base": { "@id": "urn:solid-server:default:AccountIdentityKeyRoute" }
+      },
+      "source": {
+        "@id": "urn:solid-server:default:IdentityKeyResourceHandler",
+        "@type": "DeleteIdentityKeyHandler",
+        "keyStore": { "@id": "urn:solid-server:default:IdentityKeyStore" },
+        "keyRoute": { "@id": "urn:solid-server:default:AccountIdentityKeyIdRoute" }
+      }
+    },
+
+    {
+      "@id": "urn:solid-server:default:InteractionRouteHandler",
+      "@type": "WaterfallHandler",
+      "handlers": [{ "@id": "urn:solid-server:default:AccountIdentityKeyIdRouter" }]
+    }
+  ]
+}

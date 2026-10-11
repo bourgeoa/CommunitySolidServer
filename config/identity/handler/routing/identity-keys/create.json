@@ -1,0 +1,26 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+  "@graph": [
+    {
+      "comment": "Handles the registration of the identity keys of an account, which are the keys an agent uses to sign self-issued credentials.",
+      "@id": "urn:solid-server:default:AccountIdentityKeyRouter",
+      "@type": "AuthorizedRouteHandler",
+      "route": {
+        "@id": "urn:solid-server:default:AccountIdentityKeyRoute",
+        "@type": "RelativePathInteractionRoute",
+        "base": { "@id": "urn:solid-server:default:AccountIdRoute" },
+        "relativePath": "identity-keys/"
+      },
+      "source": {
+        "@type": "ViewInteractionHandler",
+        "source": {
+          "@id": "urn:solid-server:default:CreateIdentityKeyHandler",
+          "@type": "CreateIdentityKeyHandler",
+          "webIdStore": { "@id": "urn:solid-server:default:WebIdStore" },
+          "keyStore": { "@id": "urn:solid-server:default:IdentityKeyStore" },
+          "keyRoute": { "@id": "urn:solid-server:default:AccountIdentityKeyIdRoute" }
+        }
+      }
+    }
+  ]
+}

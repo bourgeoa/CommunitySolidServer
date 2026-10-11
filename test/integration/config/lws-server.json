@@ -42,6 +42,22 @@
         {
           "RecordObject:_record_key": "store",
           "RecordObject:_record_value": { "@id": "urn:solid-server:default:ResourceStore" }
+        },
+        {
+          "RecordObject:_record_key": "keyStore",
+          "RecordObject:_record_value": { "@id": "urn:solid-server:default:IdentityKeyStore" }
+        },
+        {
+          "RecordObject:_record_key": "accountStore",
+          "RecordObject:_record_value": { "@id": "urn:solid-server:default:AccountStore" }
+        },
+        {
+          "RecordObject:_record_key": "webIdStore",
+          "RecordObject:_record_value": { "@id": "urn:solid-server:default:WebIdStore" }
+        },
+        {
+          "RecordObject:_record_key": "passwordStore",
+          "RecordObject:_record_value": { "@id": "urn:solid-server:default:PasswordStore" }
         }
       ]
     }

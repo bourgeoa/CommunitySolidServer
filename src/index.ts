@@ -172,8 +172,10 @@ export * from './identity/configuration/PromptFactory';
 export * from './identity/configuration/ProviderFactory';
 
 // Identity/LWS
+export * from './identity/lws/BaseIdentityKeyStore';
 export * from './identity/lws/CidSubjectTokenVerifier';
 export * from './identity/lws/DidKeySubjectTokenVerifier';
+export * from './identity/lws/IdentityKeyStore';
 export * from './identity/lws/JwtCredentialUtil';
 export * from './identity/lws/LwsAccessTokenIssuer';
 export * from './identity/lws/LwsAuthorizationServerMetadataHttpHandler';
@@ -206,6 +208,13 @@ export * from './identity/interaction/client-credentials/ClientCredentialsAdapte
 export * from './identity/interaction/client-credentials/ClientCredentialsDetailsHandler';
 export * from './identity/interaction/client-credentials/CreateClientCredentialsHandler';
 export * from './identity/interaction/client-credentials/DeleteClientCredentialsHandler';
+
+// Identity/Interaction/Identity-Keys/Util
+export * from './identity/interaction/identity-keys/util/IdentityKeyRoute';
+
+// Identity/Interaction/Identity-Keys
+export * from './identity/interaction/identity-keys/CreateIdentityKeyHandler';
+export * from './identity/interaction/identity-keys/DeleteIdentityKeyHandler';
 
 // Identity/Interaction/Login
 export * from './identity/interaction/login/LogoutHandler';

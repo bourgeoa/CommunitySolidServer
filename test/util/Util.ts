@@ -20,6 +20,7 @@ const portNames = [
   'LinkedWebStorageInbox',
   'LpdHandlerWithAuth',
   'LpdHandlerWithoutAuth',
+  'LwsIdentityKeys',
   'Middleware',
   'N3Patch',
   'PermissionTable',

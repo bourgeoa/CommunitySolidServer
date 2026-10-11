@@ -78,7 +78,9 @@ The following authentication suites are supported:
   whose controlled identifier document contains the verification key (`urn:ietf:params:oauth:token-type:jwt`).
   The document can be a controlled identifier document in JSON, or an RDF document such as a WebID profile:
   the latter is a document about the subject, so it can state the verification method of the agent.
-  The document needs to be publicly readable, since the server dereferences it without credentials.
+  The keys of the agent need to be registered with this server,
+  since neither LWS nor CID requires the document of an agent to be readable by this server.
+  Keys are registered through the account of the agent, see [Registered identity keys](#registered-identity-keys).
   A WebID credential thus results in an access token for that WebID,
   like an ID token of an OpenID Connect provider designated by the WebID.
 * OpenID Connect ID tokens (`urn:ietf:params:oauth:token-type:id_token`).
@@ -93,6 +95,40 @@ so access can be granted to a `did:key` identifier the same way as to a WebID.
 
 In the dual configurations, Solid-OIDC DPoP and Bearer tokens are also accepted.
 Bearer tokens that have a `webid` claim are treated as Solid-OIDC tokens.
+
+## Registered identity keys
+
+Agents that use a self-issued credential need to have their public keys registered with this server.
+Registered keys are authoritative:
+an agent that has registered keys can only be authenticated with one of those keys,
+so the document of the agent is not used and does not need to be readable by this server.
+
+Keys are registered with the account of the agent at `POST /.account/<accountId>/identity-keys/`,
+using the same authentication as the other account endpoints.
+The body is a JSON object with the `webId` of the agent, its `publicKeyJwk`, and an optional `label`:
+
+```json
+{
+  "webId": "https://alice.example/profile/card#me",
+  "label": "laptop",
+  "publicKeyJwk": { "kty": "EC", "crv": "P-256", "x": "…", "y": "…" }
+}
+```
+
+The response contains the `keyId` that has to be used as the `kid` of the credentials of the agent,
+which is the `webId` with a fragment of the label.
+The JWK thumbprint of the key is also accepted as `kid`.
+Registering a key with the label of an existing key replaces it, which allows rotating keys,
+and a `DELETE` request to the URL in `resource` removes a key.
+A `GET` request on the endpoint lists the keys of the account.
+The keys of a WebID are removed when the WebID is unlinked from the account.
+
+A deployment where every agent has a controlled identifier document that this server can retrieve,
+can instead set `documentFetch` to `true` for the `CidSubjectTokenVerifier`
+in `config/identity/lws/default.json`,
+which dereferences the document of an agent that has no registered keys.
+That retrieval is anonymous, so it only works for documents that are readable by everyone,
+which is why it is disabled by default.
 
 ## Pagination
 

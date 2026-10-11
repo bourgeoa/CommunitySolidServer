@@ -2,6 +2,7 @@ import { fetch } from 'cross-fetch';
 import type { JWK, KeyLike } from 'jose';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { CidSubjectTokenVerifier } from '../../../../src/identity/lws/CidSubjectTokenVerifier';
+import type { IdentityKey, IdentityKeyStore } from '../../../../src/identity/lws/IdentityKeyStore';
 import { TOKEN_TYPE_ID_TOKEN, TOKEN_TYPE_JWT } from '../../../../src/identity/lws/SubjectTokenVerifier';
 import { RdfToQuadConverter } from '../../../../src/storage/conversion/RdfToQuadConverter';
 import { BadRequestHttpError } from '../../../../src/util/errors/BadRequestHttpError';
@@ -45,7 +46,22 @@ describe('A CidSubjectTokenVerifier', (): void => {
   let privateKey: KeyLike;
   let publicJwk: JWK;
   let document: Record<string, unknown>;
+  let keys: jest.Mocked<IdentityKeyStore>;
   let verifier: CidSubjectTokenVerifier;
+
+  /**
+   * The key that is registered with the store in the tests below.
+   * A function since the key is only generated in the `beforeAll`.
+   */
+  function registeredKey(): IdentityKey {
+    return {
+      id: 'id',
+      webId: subject,
+      keyId,
+      label: 'key-1',
+      jwk: publicJwk,
+    };
+  }
 
   async function sign(payload: Record<string, unknown>, header?: Record<string, unknown>, iat?: number):
   Promise<string> {
@@ -88,7 +104,14 @@ describe('A CidSubjectTokenVerifier', (): void => {
     fetchMock.mockReset();
     fetchMock.mockImplementation(async(): Promise<unknown> =>
       mockResponse(JSON.stringify(document), 'application/json'));
-    verifier = new CidSubjectTokenVerifier({ converter });
+
+    keys = {
+      findByWebId: jest.fn().mockResolvedValue([]),
+      findKey: jest.fn(),
+    } satisfies Partial<IdentityKeyStore> as any;
+
+    // The document of a subject is only retrieved if that is enabled explicitly
+    verifier = new CidSubjectTokenVerifier({ converter, keys, documentFetch: true });
   });
 
   describe('#canHandle', (): void => {
@@ -218,7 +241,7 @@ describe('A CidSubjectTokenVerifier', (): void => {
       const token = await sign(claims, { kid }, Math.floor(Date.now() / 1000) + 120);
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
         .rejects.toThrow('the iat claim is in the future');
-      verifier = new CidSubjectTokenVerifier({ converter, clockTolerance: 300 });
+      verifier = new CidSubjectTokenVerifier({ converter, keys, documentFetch: true, clockTolerance: 300 });
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
         .resolves.toEqual({ subject, issuer: subject, client: subject });
     });
@@ -335,6 +358,36 @@ describe('A CidSubjectTokenVerifier', (): void => {
         await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
           .resolves.toEqual({ subject: webId, issuer: webId, client: webId });
       });
+    });
+  });
+
+  describe('with registered keys', (): void => {
+    it('uses the registered key without retrieving the document.', async(): Promise<void> => {
+      keys.findByWebId.mockResolvedValueOnce([ registeredKey() ]);
+      keys.findKey.mockResolvedValueOnce(registeredKey());
+      const token = await sign({ ...claims, aud: audience });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .resolves.toEqual({ subject, issuer: subject, client: subject });
+      expect(keys.findByWebId).toHaveBeenCalledTimes(1);
+      expect(keys.findByWebId).toHaveBeenLastCalledWith(subject);
+      expect(keys.findKey).toHaveBeenLastCalledWith(subject, keyId);
+      expect(fetchMock).toHaveBeenCalledTimes(0);
+    });
+
+    it('rejects a key that is not registered, without retrieving the document.', async(): Promise<void> => {
+      keys.findByWebId.mockResolvedValueOnce([ registeredKey() ]);
+      const token = await sign({ ...claims, aud: audience }, { kid: '#other' });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`${subject} has no registered verification method ${subject}#other.`);
+      expect(fetchMock).toHaveBeenCalledTimes(0);
+    });
+
+    it('rejects subjects without registered keys if document retrieval is disabled.', async(): Promise<void> => {
+      verifier = new CidSubjectTokenVerifier({ converter, keys });
+      const token = await sign({ ...claims, aud: audience });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`${subject} has no registered verification methods and retrieving its document is disabled.`);
+      expect(fetchMock).toHaveBeenCalledTimes(0);
     });
   });
 });
