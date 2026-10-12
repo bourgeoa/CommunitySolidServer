@@ -1,0 +1,128 @@
+<h1>Register an identity key</h1>
+<p>
+  An identity key allows an application to authenticate as one of your WebIDs
+  with a credential it signs itself, without this server having to read the document of the WebID.
+  Only the public key is sent to the server: the private key stays in the application.
+</p>
+<form method="post" id="mainForm">
+  <p class="error" id="error"></p>
+
+  <fieldset>
+    <p>
+      Give the key a name and choose which WebID it identifies.
+      The name becomes the identifier of the key in the WebID
+      (<code>https://example.com/alice/profile/card<strong>#laptop</strong></code>),
+      and it is the name you see when you list the keys of your account.
+    </p>
+    <ol>
+      <li>
+        <label for="label">Name</label>
+        <input id="label" type="text" name="label" autofocus placeholder="laptop">
+      </li>
+    </ol>
+    <ol id="webIdList">
+    </ol>
+  </fieldset>
+
+  <fieldset>
+    <p>
+      The public key of the application, as a JSON Web Key.
+      Use the button to generate a key pair in this browser,
+      or paste the public key of an application that generated one somewhere else.
+    </p>
+    <ol>
+      <li>
+        <label for="publicKeyJwk">Public key</label>
+        <textarea id="publicKeyJwk" name="publicKeyJwk" rows="4"></textarea>
+      </li>
+      <li><button type="button" id="generate">Generate a key in this browser</button></li>
+    </ol>
+  </fieldset>
+
+  <ul class="actions">
+    <li><button type="submit" name="submit" disabled>Register key</button></li>
+    <li><button type="button" id="account-link">Back</button></li>
+  </ul>
+</form>
+
+<div class="hidden" id="privateKey">
+  <p>
+    Copy this private key to the application that has to authenticate as the WebID.
+    The server does not know it and it can not be retrieved afterwards!
+  </p>
+  <p><strong style="word-wrap:break-word;" id="private-key-value"></strong></p>
+</div>
+
+<div class="hidden" id="response">
+  <p>
+    The key was registered. The application has to use this identifier as the <code>kid</code>
+    of the credentials it signs:
+  </p>
+  <p><strong style="word-wrap:break-word;" id="key-id"></strong></p>
+
+  <p class="actions"><button type="button" id="response-account-link">Back</button></p>
+</div>
+
+<div class="hidden" id="no-webId">
+  <p class="error">There are no WebIDs linked to this account.</p>
+  <p class="actions"><button type="button" id="error-account-link">Back</button></p>
+</div>
+
+<script>
+  (async() => {
+    const controls = await fetchControls('<%= idpIndex %>');
+    const { webIdLinks } = await fetchJson(controls.account.webId, '<%= idpIndex %>');
+
+    setRedirectClick('account-link', controls.html.account.account);
+    setRedirectClick('error-account-link', controls.html.account.account);
+    setRedirectClick('response-account-link', controls.html.account.account);
+
+    const webIds = Object.keys(webIdLinks);
+    if (webIds.length === 0) {
+      setVisibility('no-webId', true);
+      setVisibility('mainForm', false);
+      return;
+    }
+
+    const elements = getElements('webIdList', 'publicKeyJwk', 'generate');
+    for (const webId of webIds) {
+      elements.webIdList.insertAdjacentHTML('beforeend', `
+        <li class="radio">
+          <label for="${webId}">
+            <input id="${webId}" type="radio" name="webId" value="${webId}" ${webIds.length === 1 ? 'checked' : ''}>
+            ${webId}
+          </label>
+        </li>`);
+    }
+
+    // Generating the key pair locally is a convenience: only the public key is posted to the server
+    if (!crypto.subtle) {
+      setVisibility('generate', false);
+    } else {
+      elements.generate.addEventListener('click', async() => {
+        const keyPair = await crypto.subtle.generateKey(
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          true,
+          [ 'sign', 'verify' ],
+        );
+        const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+        const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+        elements.publicKeyJwk.value = JSON.stringify(publicJwk);
+        updateElement('private-key-value', JSON.stringify(privateJwk), { innerText: true });
+        setVisibility('privateKey', true);
+      });
+    }
+
+    addPostListener(async() => {
+      // The form field is a string, but the public key is sent as a JWK object
+      const { keyId } = await postJsonForm(
+        controls.account.identityKeys,
+        false,
+        (json) => ({ ...json, publicKeyJwk: JSON.parse(json.publicKeyJwk) }),
+      );
+      updateElement('key-id', keyId, { innerText: true });
+      setVisibility('response', true);
+      setVisibility('mainForm', false);
+    });
+  })();
+</script>

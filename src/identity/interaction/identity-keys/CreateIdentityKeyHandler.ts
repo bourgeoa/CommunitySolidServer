@@ -52,10 +52,13 @@ export class CreateIdentityKeyHandler extends JsonInteractionHandler<OutType> im
   public async getView({ accountId }: JsonInteractionHandlerInput): Promise<JsonRepresentation> {
     assertAccountId(accountId);
     const keys: Record<string, string> = {};
-    for (const { keyId, label } of await this.keyStore.findByAccount(accountId)) {
-      keys[label] = keyId;
+    const keyIds: Record<string, string> = {};
+    for (const key of await this.keyStore.findByAccount(accountId)) {
+      // The keys are listed by their label, with the URL to manage them and the identifier to authenticate with
+      keys[key.label] = this.keyRoute.getPath({ accountId, identityKeyId: key.id });
+      keyIds[key.label] = key.keyId;
     }
-    return { json: { ...parseSchema(inSchema), keys }};
+    return { json: { ...parseSchema(inSchema), keyIds, keys }};
   }
 
   public async handle({ accountId, json }: JsonInteractionHandlerInput): Promise<JsonRepresentation<OutType>> {
@@ -67,7 +70,13 @@ export class CreateIdentityKeyHandler extends JsonInteractionHandler<OutType> im
       throw new BadRequestHttpError('WebID does not belong to this account.');
     }
 
-    const key = await this.keyStore.create(webId, accountId, publicKeyJwk as JWK, label);
+    // Only the public key of an agent may be stored: private key material has to stay with the agent
+    const jwk = publicKeyJwk as JWK;
+    if (jwk.d !== undefined || jwk.k !== undefined) {
+      throw new BadRequestHttpError('The public key can not contain private key material.');
+    }
+
+    const key = await this.keyStore.create(webId, accountId, jwk, label);
     const resource = this.keyRoute.getPath({ accountId, identityKeyId: key.id });
 
     // The keyId is the value that has to be used as the kid of a credential signed with this key

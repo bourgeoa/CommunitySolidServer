@@ -18,6 +18,27 @@
         "ControlHandler:_controls_key": "identityKeys",
         "ControlHandler:_controls_value": { "@id": "urn:solid-server:default:AccountIdentityKeyRoute" }
       }]
+    },
+
+    {
+      "@id": "urn:solid-server:default:HtmlViewHandler",
+      "@type": "HtmlViewHandler",
+      "templates": [{
+        "@id": "urn:solid-server:default:CreateIdentityKeyHtml",
+        "@type": "HtmlViewEntry",
+        "filePath": "@css:templates/identity/account/create-identity-key.html.ejs",
+        "route": { "@id": "urn:solid-server:default:AccountIdentityKeyRoute" }
+      }]
+    },
+    {
+      "ControlHandler:_controls_value": {
+        "@id": "urn:solid-server:default:AccountHtmlControlHandler",
+        "@type": "ControlHandler",
+        "controls": [{
+          "ControlHandler:_controls_key": "createIdentityKey",
+          "ControlHandler:_controls_value": { "@id": "urn:solid-server:default:AccountIdentityKeyRoute" }
+        }]
+      }
     }
   ]
 }

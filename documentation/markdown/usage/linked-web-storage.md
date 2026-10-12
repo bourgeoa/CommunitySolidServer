@@ -117,6 +117,8 @@ The body is a JSON object with the `webId` of the agent, its `publicKeyJwk`, and
 
 The response contains the `keyId` that has to be used as the `kid` of the credentials of the agent,
 which is the `webId` with a fragment of the label.
+Only the public key may be sent: a request that contains private key material is rejected,
+since the private key has to stay with the agent.
 The JWK thumbprint of the key is also accepted as `kid`.
 Registering a key with the label of an existing key replaces it, which allows rotating keys,
 and a `DELETE` request to the URL in `resource` removes a key.

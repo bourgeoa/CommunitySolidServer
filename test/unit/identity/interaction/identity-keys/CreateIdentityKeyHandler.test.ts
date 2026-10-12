@@ -44,8 +44,11 @@ describe('A CreateIdentityKeyHandler', (): void => {
   it('shows the required fields and the keys of the WebIDs of the account.', async(): Promise<void> => {
     await expect(handler.getView({ accountId } as any)).resolves.toEqual({
       json: {
-        keys: {
+        keyIds: {
           [label]: keyId,
+        },
+        keys: {
+          [label]: resource,
         },
         fields: {
           label: { required: false, type: 'string' },
@@ -60,6 +63,7 @@ describe('A CreateIdentityKeyHandler', (): void => {
     });
     expect(keyStore.findByAccount).toHaveBeenCalledTimes(1);
     expect(keyStore.findByAccount).toHaveBeenLastCalledWith(accountId);
+    expect(route.getPath).toHaveBeenLastCalledWith({ accountId, identityKeyId: id });
   });
 
   it('registers a new key based on the provided settings.', async(): Promise<void> => {
@@ -83,6 +87,18 @@ describe('A CreateIdentityKeyHandler', (): void => {
 
   it('errors if no key is provided.', async(): Promise<void> => {
     await expect(handler.handle({ accountId, json: { webId }} as any)).rejects.toThrow(BadRequestHttpError);
+    expect(keyStore.create).toHaveBeenCalledTimes(0);
+  });
+
+  it('errors if the key contains a private key.', async(): Promise<void> => {
+    const jsonWithPrivateKey = { webId, label, publicKeyJwk: { ...jwk, d: 'private' }};
+    await expect(handler.handle({ accountId, json: jsonWithPrivateKey } as any)).rejects.toThrow(BadRequestHttpError);
+    expect(keyStore.create).toHaveBeenCalledTimes(0);
+  });
+
+  it('errors if the key is a symmetric key.', async(): Promise<void> => {
+    const jsonWithSymmetricKey = { webId, label, publicKeyJwk: { kty: 'oct', k: 'secret' }};
+    await expect(handler.handle({ accountId, json: jsonWithSymmetricKey } as any)).rejects.toThrow(BadRequestHttpError);
     expect(keyStore.create).toHaveBeenCalledTimes(0);
   });
 

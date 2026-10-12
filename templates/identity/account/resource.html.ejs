@@ -27,13 +27,24 @@
   <a id="createCredentials" href="" class="link">Create token</a>
   <ul id="clientCredentialsEntries"></ul>
 </div>
+<div id="identityKeys">
+  <h2>Identity keys</h2>
+  <p>
+    The public keys this account registered for its WebIDs.
+    An application can use them to authenticate as a WebID with a credential it signs itself,
+    without this server having to read the document of the WebID.
+  </p>
+  <a id="createIdentityKey" href="" class="link">Register key</a>
+  <ul id="identityKeyEntries"></ul>
+</div>
 <p class="actions">
   <button class="hidden" type="button" id="oidc">Continue authentication</button>
   <button type="button" id="logout" name="logout">Log out</button>
 </p>
 
 <script>
-  const elements = getElements('passwordLoginEntries', 'podEntries', 'webIdEntries', 'clientCredentialsEntries', 'oidc', 'logout');
+  const elements = getElements('passwordLoginEntries', 'podEntries', 'webIdEntries', 'clientCredentialsEntries',
+    'identityKeyEntries', 'oidc', 'logout');
 
   // Retrieve and display client information
   (async() => {
@@ -89,6 +100,19 @@
       updateElement('createCredentials', Object.keys(webIdLinks).length && controls.html.account.createClientCredentials, { href: true });
       showAccountInfo(elements.clientCredentialsEntries, clientCredentials, false, true,
         'Are you sure you want to delete this token? This will prevent this token from being used in the future.');
+    }
+
+    // Update identity key entries
+    const { keys } = controls.account.identityKeys ? await fetchJson(controls.account.identityKeys) : {};
+    if (!controls.html.account.createIdentityKey && Object.keys(keys ?? {}).length === 0) {
+      setVisibility('identityKeys', false);
+    } else {
+      // Initial boolean is so the create button gets hidden if the account has no WebIDs.
+      // Currently, this does not get updated if the last WebID gets deleted, until the page is refreshed.
+      updateElement('createIdentityKey', Object.keys(webIdLinks).length && controls.html.account.createIdentityKey, { href: true });
+      showAccountInfo(elements.identityKeyEntries, keys, false, true,
+        'Are you sure you want to remove this key? ' +
+        'The application using it will no longer be able to authenticate as this WebID.');
     }
   })();
 
