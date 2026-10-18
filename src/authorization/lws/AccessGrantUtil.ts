@@ -159,7 +159,8 @@ function validatePolicy(policy: unknown, storage: string): void {
     if (!isJsonObject(target) || typeof target.type !== 'string' || !isStringArray(target.value)) {
       invalid('a target needs to be an object with a type and an array of values.');
     }
-    if (![ 'DataResource', 'Container', 'StorageResource' ].some((type): boolean => hasType(target.type, type))) {
+    const supported = [ 'DataResource', 'Container', 'StorageResource', 'ContainerMembers' ];
+    if (!supported.some((type): boolean => hasType(target.type, type))) {
       invalid(`unsupported target type ${target.type}.`);
     }
     for (const value of target.value) {

@@ -143,6 +143,29 @@ describe('An AccessGrantReader', (): void => {
     expect(result.get(nested)).toBeUndefined();
   });
 
+  it('applies ContainerMembers targets to the container and everything inside it.', async(): Promise<void> => {
+    const sibling = { path: `${storage.path}other/doc` };
+    const root = { path: storage.path };
+    const noSlash = { path: `${storage.path}noslash` };
+    const noSlashChild = { path: `${storage.path}noslash/doc` };
+    policies.push(createPolicy([ 'read' ], 'ContainerMembers', [ container, noSlash ]));
+    request(container, AccessMode.read);
+    request(document, AccessMode.read);
+    request(nested, AccessMode.read);
+    request(noSlash, AccessMode.read);
+    request(noSlashChild, AccessMode.read);
+    request(sibling, AccessMode.read);
+    request(root, AccessMode.read);
+    const result = await reader.handle({ credentials, requestedModes });
+    expect(result.get(container)).toEqual({ read: true });
+    expect(result.get(document)).toEqual({ read: true });
+    expect(result.get(nested)).toEqual({ read: true });
+    expect(result.get(noSlash)).toEqual({ read: true });
+    expect(result.get(noSlashChild)).toEqual({ read: true });
+    expect(result.get(sibling)).toBeUndefined();
+    expect(result.get(root)).toBeUndefined();
+  });
+
   it('ignores policies without a target.', async(): Promise<void> => {
     policies.push({ type: 'AccessPolicy', action: [ 'read' ], assignee: webId });
     request(document, AccessMode.read);

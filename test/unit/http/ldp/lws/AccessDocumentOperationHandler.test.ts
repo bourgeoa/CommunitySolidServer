@@ -207,6 +207,13 @@ describe('An AccessDocumentOperationHandler', (): void => {
     expect(source.handle).toHaveBeenCalledTimes(0);
   });
 
+  it('accepts the ContainerMembers target type.', async(): Promise<void> => {
+    document.access[0].target = { type: 'ContainerMembers', value: [ `${storage.path}public/` ]};
+    post(grants, JSON.stringify(document), 'application/lws+json');
+    await expect(handler.handle({ operation })).resolves.toBe(result);
+    expect(source.handle).toHaveBeenCalledTimes(1);
+  });
+
   it('replaces the body so the source handler can still read it.', async(): Promise<void> => {
     const body = JSON.stringify(document);
     const { metadata } = operation.body;

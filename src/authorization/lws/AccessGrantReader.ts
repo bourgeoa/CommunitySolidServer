@@ -25,7 +25,8 @@ interface ResourceInfo {
  *
  * A policy of a grant applies to a resource if
  *  * its assignee is the WebID of the agent, or `foaf:Agent`, which grants access to everyone,
- *  * the resource is one of the target values (targets are not recursive),
+ *  * the resource is one of the target values (targets are not recursive), except for the
+ *    `ContainerMembers` target type, which matches the container itself and every resource inside it,
  *    and the resource matches the target type,
  *  * and all its constraints are satisfied.
  * Policies without a target do not apply to any resource.
@@ -181,10 +182,23 @@ export class AccessGrantReader extends PermissionReader {
 
   /**
    * Determines whether the given resource matches the target of the policy.
+   *
+   * `ContainerMembers` is an extension target type: it matches the target container itself and every
+   * resource inside it (recursively), so one grant can cover a container whose membership is not
+   * known in advance.
    */
   private matchesTarget(policy: AccessPolicy, identifier: ResourceIdentifier): boolean {
     const { target } = policy;
-    if (!target?.value.includes(identifier.path)) {
+    if (!target) {
+      return false;
+    }
+    if (hasType(target.type, 'ContainerMembers')) {
+      return target.value.some((value): boolean => {
+        const container = value.endsWith('/') ? value : `${value}/`;
+        return identifier.path === value || identifier.path.startsWith(container);
+      });
+    }
+    if (!target.value.includes(identifier.path)) {
       return false;
     }
     if (hasType(target.type, 'StorageResource')) {
