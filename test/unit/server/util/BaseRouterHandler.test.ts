@@ -43,6 +43,18 @@ describe('A BaseRouterHandler', (): void => {
       .rejects.toThrow('Cannot handle route /baz');
   });
 
+  it('matches the same path on a storage of a subdomain.', async(): Promise<void> => {
+    await expect(router.canHandle({ method, target: { path: 'http://alice.example.com/foo' }}))
+      .resolves.toBeUndefined();
+    await expect(router.canHandle({ method, target: { path: 'http://alice.example.com/baz' }}))
+      .rejects.toThrow('Cannot handle route /baz');
+  });
+
+  it('does not match a target outside of the base URL.', async(): Promise<void> => {
+    await expect(router.canHandle({ method, target: { path: 'http://other.com/foo' }}))
+      .rejects.toThrow('Cannot handle route http://other.com/foo');
+  });
+
   it('accepts valid input.', async(): Promise<void> => {
     await expect(router.canHandle({ method, target })).resolves.toBeUndefined();
   });

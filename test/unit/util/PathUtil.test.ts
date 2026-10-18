@@ -14,6 +14,7 @@ import {
   extractScheme,
   getExtension,
   getModuleRoot,
+  getRelativePathName,
   getRelativeUrl,
   isContainerIdentifier,
   isContainerPath,
@@ -252,6 +253,24 @@ describe('PathUtil', (): void => {
       expect(regex.exec('http://alice.bob.test.com/foo/')![1]).toBe('alice.bob');
       expect(regex.exec('http://test.com/')).toBeNull();
       expect(regex.exec('http://alicetest.com/foo/')).toBeNull();
+    });
+  });
+
+  describe('#getRelativePathName', (): void => {
+    it('returns the path of a target below the base URL.', (): void => {
+      expect(getRelativePathName('http://test.com/foo/', 'http://test.com/foo/bar/baz')).toBe('/bar/baz');
+      expect(getRelativePathName('http://test.com/', 'http://test.com/')).toBe('/');
+    });
+
+    it('returns the path of a target on a subdomain of the base URL.', (): void => {
+      expect(getRelativePathName('http://test.com/', 'http://alice.test.com/foo')).toBe('/foo');
+      expect(getRelativePathName('http://test.com/foo/', 'http://alice.bob.test.com/foo/bar')).toBe('/bar');
+    });
+
+    it('returns undefined for a target outside of the base URL.', (): void => {
+      expect(getRelativePathName('http://test.com/foo/', 'http://test.com/')).toBeUndefined();
+      expect(getRelativePathName('http://test.com/foo/', 'http://alicetest.com/foo/bar')).toBeUndefined();
+      expect(getRelativePathName('http://test.com/foo/', 'http://test.com/foo')).toBeUndefined();
     });
   });
 

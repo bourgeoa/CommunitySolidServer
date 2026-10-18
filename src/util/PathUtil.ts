@@ -285,6 +285,24 @@ export function createSubdomainRegexp(baseUrl: string): RegExp {
 }
 
 /**
+ * Creates the path of a target relative to the given base URL, keeping the leading slash.
+ *
+ * Targets of a storage on a subdomain of the base URL are made relative to the base URL as well,
+ * so that the resulting path name does not depend on the subdomain:
+ * with a base URL of `http://example.com/`, the target `http://alice.example.com/foo` results in `/foo`.
+ *
+ * @param baseUrl - Base URL of the server.
+ * @param path - Path of the target.
+ *
+ * @returns The relative path name, or `undefined` if the target is outside of the base URL.
+ */
+export function getRelativePathName(baseUrl: string, path: string): string | undefined {
+  // The match consists of the scheme, the host, and the path of the base URL, so the remainder starts with a slash
+  const match = createSubdomainRegexp(ensureTrailingSlash(baseUrl)).exec(path);
+  return match ? path.slice(match[0].length - 1) : undefined;
+}
+
+/**
  * Returns the folder corresponding to the root of the Community Solid Server module
  */
 export function getModuleRoot(): string {

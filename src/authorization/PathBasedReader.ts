@@ -2,7 +2,7 @@ import { getLoggerFor } from '../logging/LogUtil';
 import { concat } from '../util/IterableUtil';
 import { IdentifierMap, IdentifierSetMultiMap } from '../util/map/IdentifierMap';
 import { getDefault } from '../util/map/MapUtil';
-import { ensureTrailingSlash, trimTrailingSlashes } from '../util/PathUtil';
+import { ensureTrailingSlash, getRelativePathName } from '../util/PathUtil';
 import type { PermissionReaderInput } from './PermissionReader';
 import { PermissionReader } from './PermissionReader';
 import type { AccessMap, PermissionMap } from './permissions/Permissions';
@@ -12,6 +12,8 @@ import type { AccessMap, PermissionMap } from './permissions/Permissions';
  * The keys are regular expression strings.
  * The regular expressions should all start with a slash
  * and will be evaluated relative to the base URL.
+ * Identifiers of a storage on a subdomain of the base URL are evaluated by their path name,
+ * so the same readers are used for every storage of a server in subdomain mode.
  *
  * Will error if no match is found.
  */
@@ -56,9 +58,9 @@ export class PathBasedReader extends PermissionReader {
    * Find the PermissionReader corresponding to the given path.
    */
   private findReader(path: string): PermissionReader | undefined {
-    if (path.startsWith(this.baseUrl)) {
-      // We want to keep the leading slash
-      const relative = path.slice(trimTrailingSlashes(this.baseUrl).length);
+    // We want to keep the leading slash
+    const relative = getRelativePathName(this.baseUrl, path);
+    if (relative !== undefined) {
       for (const [ regex, reader ] of this.paths) {
         if (regex.test(relative)) {
           this.logger.debug(`Permission reader found for ${path}`);

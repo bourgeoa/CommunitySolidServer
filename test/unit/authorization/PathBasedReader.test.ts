@@ -62,4 +62,27 @@ describe('A PathBasedReader', (): void => {
       new IdentifierSetMultiMap([[{ path: joinUrl(baseUrl, 'second') }, AccessMode.read ]]),
     );
   });
+
+  it('passes requests for a storage of a subdomain to the matching reader.', async(): Promise<void> => {
+    // A server in subdomain mode serves every storage on its own subdomain, outside of the base URL
+    const subdomain = 'http://alice.test.com/foo/first';
+    const input: PermissionReaderInput = {
+      credentials: {},
+      requestedModes: new IdentifierSetMultiMap<AccessMode>([
+        [{ path: subdomain }, AccessMode.read ],
+      ]),
+    };
+
+    const result = new IdentifierMap([
+      [{ path: subdomain }, permissionSet ],
+    ]);
+
+    await expect(reader.handle(input)).resolves.toEqual(result);
+    expect(readers[0].handleSafe).toHaveBeenCalledTimes(1);
+    compareMaps(
+      readers[0].handleSafe.mock.calls[0][0].requestedModes,
+      new IdentifierSetMultiMap([[{ path: subdomain }, AccessMode.read ]]),
+    );
+    expect(readers[1].handleSafe).toHaveBeenCalledTimes(0);
+  });
 });
