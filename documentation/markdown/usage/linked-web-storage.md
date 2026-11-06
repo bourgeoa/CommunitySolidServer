@@ -66,7 +66,9 @@ which can be requested as `application/linkset+json`,
 and modified with a JSON Patch or JSON Merge Patch request on that linkset.
 JSON Patch paths refer to positions in the linkset as it is returned by a `GET` request.
 Server-managed links, such as `up` and the containment triples, can not be modified,
-so resources can not be moved by changing their `up` link.
+so resources can not be moved by changing their `up` link:
+a patch that changes it is rejected with a 409 response, and the storage description has no `MoveResource` capability.
+Leaving server-managed links out of a patched linkset has no effect.
 
 ## Authorization
 
