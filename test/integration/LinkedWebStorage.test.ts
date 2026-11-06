@@ -233,6 +233,16 @@ describe.each(combinations)('A %s server using %s', (protocol, authorization, pr
     expect(challenge).toContain(`as_uri="${baseUrl}"`);
     expect(challenge).toContain(`realm="${baseUrl}"`);
     expect(challenge).not.toContain('error=');
+    expect(getLinks(response)).toContain(`<${baseUrl}>; rel="${LWS}storage"`);
+
+    const metadataUrl = /resource_metadata="([^"]+)"/u.exec(challenge!)![1];
+    expect(metadataUrl).toBe(`${baseUrl}.well-known/oauth-protected-resource/${container.slice(baseUrl.length)}`);
+    const metadata = await fetch(metadataUrl);
+    expect(metadata.status).toBe(200);
+    await expect(metadata.json()).resolves.toEqual(expect.objectContaining({
+      resource: container,
+      authorization_servers: [ baseUrl ],
+    }));
   });
 
   it('exchanges a did:key credential for an access token.', async(): Promise<void> => {

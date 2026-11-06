@@ -74,4 +74,17 @@ describe('A LwsWwwAuthMetadataWriter', (): void => {
         `Bearer as_uri="${asUri}", realm="http://example.com/", error="invalid_token", scope="openid webid"`,
     });
   });
+
+  it('adds the resource_metadata parameter if the base URL is known.', async(): Promise<void> => {
+    writer = new LwsWwwAuthMetadataWriter(asUri, storageStrategy, undefined, 'http://example.com/');
+    const metadata = new RepresentationMetadata({
+      [HTTP.statusCodeNumber]: '401',
+      [SOLID_ERROR.target]: 'http://example.com/foo/bar?a=b',
+    });
+    await expect(writer.handle({ response, metadata })).resolves.toBeUndefined();
+    expect(response.getHeaders()).toEqual({
+      'www-authenticate': 'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource/foo/bar?a=b", ' +
+        `as_uri="${asUri}", realm="http://example.com/"`,
+    });
+  });
 });

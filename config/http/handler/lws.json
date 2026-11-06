@@ -1,11 +1,12 @@
 {
   "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
   "import": [
+    "css:config/http/handler/handlers/lws-protected-resource-metadata.json",
     "css:config/http/handler/handlers/storage-description.json"
   ],
   "@graph": [
     {
-      "comment": "These are all the handlers a request will go through until it is handled. Includes the LWS authorization server endpoints.",
+      "comment": "These are all the handlers a request will go through until it is handled. Includes the LWS authorization server endpoints and the protected resource metadata.",
       "@id": "urn:solid-server:default:HttpHandler",
       "@type": "SequenceHandler",
       "handlers": [
@@ -20,6 +21,7 @@
             { "@id": "urn:solid-server:default:NotificationHttpHandler" },
             { "@id": "urn:solid-server:default:StorageDescriptionHandler" },
             { "@id": "urn:solid-server:default:LwsAuthorizationServerHandler" },
+            { "@id": "urn:solid-server:default:LwsProtectedResourceMetadataHandler" },
             { "@id": "urn:solid-server:default:AuthResourceHttpHandler" },
             { "@id": "urn:solid-server:default:IdentityProviderHandler" },
             { "@id": "urn:solid-server:default:LdpHandler" }

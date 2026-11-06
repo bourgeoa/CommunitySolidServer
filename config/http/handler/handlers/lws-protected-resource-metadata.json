@@ -1,0 +1,23 @@
+{
+  "@context": [
+    "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^8.0.0/components/context.jsonld",
+    "https://linkedsoftwaredependencies.org/bundles/npm/asynchronous-handlers/^1.0.0/components/context.jsonld"
+  ],
+  "@graph": [
+    {
+      "comment": "Serves the OAuth 2.0 Protected Resource Metadata (RFC 9728) of every resource, which 401 responses link to.",
+      "@id": "urn:solid-server:default:LwsProtectedResourceMetadataHandler",
+      "@type": "RouterHandler",
+      "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+      "allowedMethods": [ "GET", "HEAD" ],
+      "allowedPathNames": [ "^/\\.well-known/oauth-protected-resource(/.*)?$" ],
+      "handler": {
+        "@type": "LwsProtectedResourceMetadataHttpHandler",
+        "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+        "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
+        "authorizationServers": [{ "@id": "urn:solid-server:default:variable:baseUrl" }]
+      }
+    }
+  ]
+}

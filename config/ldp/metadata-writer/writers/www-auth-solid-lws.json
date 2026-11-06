@@ -7,6 +7,7 @@
       "@type": "LwsWwwAuthMetadataWriter",
       "asUri": { "@id": "urn:solid-server:default:variable:baseUrl" },
       "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+      "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
       "extraParameters": "scope=\"openid webid\""
     }
   ]

@@ -403,6 +403,7 @@ export * from './server/WebSocketServerConfigurator';
 // Server/Description
 export * from './server/description/AccessServiceDescriber';
 export * from './server/description/LwsNotificationServiceDescriber';
+export * from './server/description/LwsProtectedResourceMetadataHttpHandler';
 export * from './server/description/LwsStorageDescriber';
 export * from './server/description/LwsStorageDescriptionHandler';
 export * from './server/description/PodStorageLocationStrategy';
