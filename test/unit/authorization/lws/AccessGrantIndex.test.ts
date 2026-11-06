@@ -123,4 +123,19 @@ describe('An AccessGrantIndex', (): void => {
     await expect(index.getGrants(storage)).resolves.toHaveLength(2);
     expect(store.hasResource).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps newer cache entries when an older load fails.', async(): Promise<void> => {
+    let reject!: (error: Error) => void;
+    store.hasResource.mockReturnValueOnce(new Promise((resolve, rej): void => {
+      reject = rej;
+    }));
+    const failing = index.getGrants(storage);
+    // The cache gets cleared and refilled while the first load is still pending
+    emitter.emit('changed', { path: grant1 }, AS.terms.Update, {} as any);
+    const grants = await index.getGrants(storage);
+    reject(new Error('bad data'));
+    await expect(failing).rejects.toThrow('bad data');
+    await expect(index.getGrants(storage)).resolves.toBe(grants);
+    expect(store.hasResource).toHaveBeenCalledTimes(2);
+  });
 });
