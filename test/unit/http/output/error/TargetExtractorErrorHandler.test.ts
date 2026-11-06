@@ -45,6 +45,14 @@ describe('A TargetExtractorErrorHandler', (): void => {
     expect(targetExtractor.handleSafe).toHaveBeenLastCalledWith(input);
   });
 
+  it('keeps the target of errors that already have one.', async(): Promise<void> => {
+    input.error.metadata.add(SOLID_ERROR.terms.target, 'http://example.com/bar');
+    await expect(handler.handle(input)).resolves.toBe('response');
+    expect(input.error.metadata.getAll(SOLID_ERROR.terms.target).map((term): string => term.value))
+      .toEqual([ 'http://example.com/bar' ]);
+    expect(targetExtractor.handleSafe).toHaveBeenCalledTimes(0);
+  });
+
   it('still calls the source handler if the identifier could not be added.', async(): Promise<void> => {
     targetExtractor.handleSafe.mockRejectedValueOnce(new Error('bad data'));
     await expect(handler.handle(input)).resolves.toBe('response');

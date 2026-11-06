@@ -106,6 +106,7 @@ describe('An LwsAccessTokenExtractor', (): void => {
         agent: { webId: subject },
         client: { clientId: client },
         issuer: { url: 'https://storage.example/' },
+        storage: { path: storage },
       });
       expect(targetExtractor.handleSafe).toHaveBeenLastCalledWith({ request: expect.any(Object) });
       expect(storageStrategy.getStorageIdentifier).toHaveBeenLastCalledWith(target);
@@ -151,6 +152,57 @@ describe('An LwsAccessTokenExtractor', (): void => {
       await expectInvalid(createRequest(await issuer.issue(subject, client, storage)), message);
     });
 
+    it('accepts tokens for any storage of this server on service paths.', async(): Promise<void> => {
+      extractor = new LwsAccessTokenExtractor({
+        issuer,
+        targetExtractor,
+        storageStrategy,
+        baseUrl: 'https://storage.example/',
+        servicePaths: [ '.notifications/lws/' ],
+      });
+      const serviceTarget = { path: 'https://storage.example/.notifications/lws/' };
+      targetExtractor.handleSafe.mockResolvedValue(serviceTarget);
+      storageStrategy.getStorageIdentifier.mockImplementation(async({ path }): Promise<{ path: string }> => {
+        if (path.startsWith(storage)) {
+          return { path: storage };
+        }
+        throw new Error('no storage');
+      });
+      const token = await issuer.issue(subject, client, storage);
+      await expect(extractor.handle(createRequest(token))).resolves.toEqual({
+        agent: { webId: subject },
+        client: { clientId: client },
+        issuer: { url: 'https://storage.example/' },
+        storage: { path: storage },
+      });
+
+      // The audience needs to be a storage, not a resource in a storage
+      const message = `The LWS access token is not intended for the storage containing ${serviceTarget.path}.`;
+      await expectInvalid(createRequest(await issuer.issue(subject, client, `${storage}foo`)), message);
+      await expectInvalid(createRequest(await issuer.issue(subject, client, 'https://other.example/')), message);
+
+      // Other paths outside of storages still reject the token
+      targetExtractor.handleSafe.mockResolvedValue({ path: 'https://storage.example/.well-known/other' });
+      await expectInvalid(createRequest(token), 'is not intended for the storage containing');
+    });
+
+    it('does not accept tokens on service paths without a base URL.', async(): Promise<void> => {
+      extractor = new LwsAccessTokenExtractor({
+        issuer,
+        targetExtractor,
+        storageStrategy,
+        servicePaths: [ '.notifications/lws/' ],
+      });
+      targetExtractor.handleSafe.mockResolvedValue({ path: 'https://storage.example/.notifications/lws/' });
+      storageStrategy.getStorageIdentifier.mockRejectedValueOnce(new Error('no storage'));
+      await expectInvalid(createRequest(await issuer.issue(subject, client, storage)), 'is not intended for');
+
+      // No service paths by default
+      extractor = new LwsAccessTokenExtractor({ issuer, targetExtractor, storageStrategy, baseUrl: 'https://storage.example/' });
+      storageStrategy.getStorageIdentifier.mockRejectedValueOnce(new Error('no storage'));
+      await expectInvalid(createRequest(await issuer.issue(subject, client, storage)), 'is not intended for');
+    });
+
     describe('with trusted issuers', (): void => {
       beforeEach(async(): Promise<void> => {
         extractor = new LwsAccessTokenExtractor({
@@ -168,6 +220,7 @@ describe('An LwsAccessTokenExtractor', (): void => {
           agent: { webId: subject },
           client: { clientId: client },
           issuer: { url: externalIssuer },
+          storage: { path: storage },
         });
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(fetchMock).toHaveBeenLastCalledWith('https://as.example/.well-known/lws-configuration/lws', { headers: { accept: 'application/json' }});
@@ -177,6 +230,7 @@ describe('An LwsAccessTokenExtractor', (): void => {
         await expect(extractor.handle(createRequest(await signExternal({})))).resolves.toEqual({
           agent: { webId: subject },
           issuer: { url: externalIssuer },
+          storage: { path: storage },
         });
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(createRemoteJWKSetMock).toHaveBeenCalledTimes(1);

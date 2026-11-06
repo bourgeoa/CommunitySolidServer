@@ -20,6 +20,8 @@
             "issuer": { "@id": "urn:solid-server:default:LwsAccessTokenIssuer" },
             "targetExtractor": { "@id": "urn:solid-server:default:TargetExtractor" },
             "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
+            "baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+            "servicePaths": [ ".notifications/lws/" ],
             "skipWebIdTokens": true
           },
           {

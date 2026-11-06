@@ -13,7 +13,7 @@ import { NotImplementedHttpError } from '../util/errors/NotImplementedHttpError'
 import { UnauthorizedHttpError } from '../util/errors/UnauthorizedHttpError';
 import { matchesAuthorizationScheme } from '../util/HeaderUtil';
 import { isJsonObject } from '../util/JsonMergePatch';
-import { trimTrailingSlashes } from '../util/PathUtil';
+import { joinUrl, trimTrailingSlashes } from '../util/PathUtil';
 import { SOLID_ERROR } from '../util/Vocabularies';
 import type { Credentials } from './Credentials';
 import { CredentialsExtractor } from './CredentialsExtractor';
@@ -47,6 +47,18 @@ export interface LwsAccessTokenExtractorArgs {
    */
   skipWebIdTokens?: boolean;
   /**
+   * Base URL of the server. Needed for `servicePaths`.
+   */
+  baseUrl?: string;
+  /**
+   * Paths, relative to the base URL, of server-wide LWS services that are not part of a storage,
+   * such as the subscription endpoint of the notification service.
+   * Requests to them accept an access token for any storage on this server.
+   * The service is then responsible for only allowing operations on that storage,
+   * which is available as the `storage` field of the credentials.
+   */
+  servicePaths?: string[];
+  /**
    * Allowed clock skew in seconds. Defaults to 60.
    */
   clockTolerance?: number;
@@ -71,6 +83,7 @@ export class LwsAccessTokenExtractor extends CredentialsExtractor {
   private readonly trustedIssuers: string[];
   private readonly skipWebIdTokens: boolean;
   private readonly clockTolerance: number;
+  private readonly serviceUrls: string[];
   private readonly keySets = new Map<string, JWTVerifyGetKey>();
 
   public constructor(args: LwsAccessTokenExtractorArgs) {
@@ -81,6 +94,9 @@ export class LwsAccessTokenExtractor extends CredentialsExtractor {
     this.trustedIssuers = args.trustedIssuers ?? [];
     this.skipWebIdTokens = args.skipWebIdTokens ?? false;
     this.clockTolerance = args.clockTolerance ?? 60;
+    this.serviceUrls = args.baseUrl ?
+        (args.servicePaths ?? []).map((path): string => joinUrl(args.baseUrl!, path)) :
+        [];
   }
 
   public async canHandle({ headers: { authorization }}: HttpRequest): Promise<void> {
@@ -118,23 +134,34 @@ export class LwsAccessTokenExtractor extends CredentialsExtractor {
       throw this.createError('The audience of an LWS access token needs to contain exactly one value.');
     }
     const target = await this.targetExtractor.handleSafe({ request });
-    let storage: string | undefined;
-    try {
-      storage = (await this.storageStrategy.getStorageIdentifier(target)).path;
-    } catch {
-      // No storage contains the target
-    }
-    if (!storage || audiences[0] !== storage) {
+    const storage = await this.findStorage(target.path);
+    // Server-wide services accept tokens for any storage on this server
+    const valid = storage ?
+      audiences[0] === storage :
+      this.serviceUrls.some((url): boolean => target.path.startsWith(url)) &&
+      await this.findStorage(audiences[0]) === audiences[0];
+    if (!valid) {
       throw this.createError(`The LWS access token is not intended for the storage containing ${target.path}.`);
     }
 
     const { sub, client_id: clientId, iss } = payload;
     this.logger.info(`Verified LWS access token. Agent: ${sub}, client: ${String(clientId)}, issuer: ${iss}`);
-    const credentials: Credentials = { agent: { webId: sub! }, issuer: { url: iss! }};
+    const credentials: Credentials = { agent: { webId: sub! }, issuer: { url: iss! }, storage: { path: audiences[0] }};
     if (typeof clientId === 'string') {
       credentials.client = { clientId };
     }
     return credentials;
+  }
+
+  /**
+   * Returns the storage containing the given resource, if there is one.
+   */
+  private async findStorage(path: string): Promise<string | undefined> {
+    try {
+      return (await this.storageStrategy.getStorageIdentifier({ path })).path;
+    } catch {
+      // No storage contains the resource
+    }
   }
 
   private getToken(authorization: string): string {

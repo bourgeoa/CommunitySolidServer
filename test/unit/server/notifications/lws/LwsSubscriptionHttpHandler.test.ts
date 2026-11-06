@@ -24,7 +24,7 @@ import { UnauthorizedHttpError } from '../../../../../src/util/errors/Unauthoriz
 import { UnsupportedMediaTypeHttpError } from '../../../../../src/util/errors/UnsupportedMediaTypeHttpError';
 import { IdentifierMap } from '../../../../../src/util/map/IdentifierMap';
 import { readableToString } from '../../../../../src/util/StreamUtil';
-import { LWS, RDF, SOLID_HTTP } from '../../../../../src/util/Vocabularies';
+import { LWS, RDF, SOLID_ERROR, SOLID_HTTP } from '../../../../../src/util/Vocabularies';
 
 describe('A LwsSubscriptionHttpHandler', (): void => {
   const baseUrl = 'http://example.com/';
@@ -222,7 +222,26 @@ describe('A LwsSubscriptionHttpHandler', (): void => {
     it('throws a 401 if an anonymous subscriber can not read a topic.', async(): Promise<void> => {
       credentials = {};
       permissionReader.handleSafe.mockResolvedValueOnce(new IdentifierMap());
-      await expect(handler.handle({ request, response, operation })).rejects.toThrow(UnauthorizedHttpError);
+      const error: UnauthorizedHttpError = await handler.handle({ request, response, operation })
+        .catch((err: unknown): any => err);
+      expect(error).toBeInstanceOf(UnauthorizedHttpError);
+      // The topic is the target, so the response refers to the storage of the topic
+      expect(error.metadata.get(SOLID_ERROR.terms.target)?.value).toBe(topic);
+      expect(storage.add).toHaveBeenCalledTimes(0);
+    });
+
+    it('accepts topics in the storage the access token was issued for.', async(): Promise<void> => {
+      credentials.storage = { path: 'http://example.com/alice/' };
+      await expect(handler.handle({ request, response, operation })).resolves.toBeDefined();
+      expect(storage.add).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws a 403 for topics outside the storage the access token was issued for.', async(): Promise<void> => {
+      credentials.storage = { path: 'http://example.com/bob/' };
+      const result = handler.handle({ request, response, operation });
+      await expect(result).rejects.toThrow(ForbiddenHttpError);
+      await expect(result).rejects.toThrow(`${topic} is not in the storage http://example.com/bob/`);
+      expect(permissionReader.handleSafe).toHaveBeenCalledTimes(0);
       expect(storage.add).toHaveBeenCalledTimes(0);
     });
   });

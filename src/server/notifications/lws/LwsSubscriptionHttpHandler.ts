@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { randomUUID } from 'node:crypto';
+import { DataFactory } from 'n3';
+import { getLoggerFor } from '../../../logging/LogUtil';
 import type { Credentials } from '../../../authentication/Credentials';
 import type { CredentialsExtractor } from '../../../authentication/CredentialsExtractor';
 import { isAbsoluteUri, LWS_CONTEXT_URI } from '../../../authorization/lws/AccessGrantUtil';
@@ -21,7 +23,7 @@ import { isJsonObject } from '../../../util/JsonMergePatch';
 import { IdentifierSetMultiMap } from '../../../util/map/IdentifierMap';
 import { joinUrl } from '../../../util/PathUtil';
 import { readableToString } from '../../../util/StreamUtil';
-import { LWS, RDF, SOLID_HTTP } from '../../../util/Vocabularies';
+import { LWS, RDF, SOLID_ERROR, SOLID_HTTP } from '../../../util/Vocabularies';
 import type { OperationHttpHandlerInput } from '../../OperationHttpHandler';
 import { OperationHttpHandler } from '../../OperationHttpHandler';
 import type { LwsSubscription, LwsSubscriptionStorage } from './LwsSubscriptionStorage';
@@ -61,6 +63,9 @@ export interface LwsSubscriptionHttpHandlerArgs {
  *
  * A POST request to the endpoint creates a subscription,
  * if the subscriber can read all resources of the `topic` array.
+ * An access token for the subscription endpoint is issued for a storage,
+ * as the endpoint itself is not part of any storage,
+ * so subscribers can only subscribe to resources in the storage of their token.
  * A GET request to the endpoint returns the subscriptions of the subscriber as an LWS container.
  * Every subscription supports GET and DELETE requests.
  * Subscriptions of authenticated subscribers can only be accessed by the same agent.
@@ -175,15 +180,25 @@ export class LwsSubscriptionHttpHandler extends OperationHttpHandler {
    * Throws an error if the subscriber can not read all of the given resources.
    */
   private async assertReadable(topics: string[], credentials: Credentials): Promise<void> {
+    const storage = (credentials.storage as { path?: string } | undefined)?.path;
+    const outside = storage && topics.find((path): boolean => !path.startsWith(storage));
+    if (outside) {
+      throw new ForbiddenHttpError(`${outside} is not in the storage ${storage} the access token was issued for.`);
+    }
     const requestedModes = new IdentifierSetMultiMap<AccessMode>(
       topics.map((path): [{ path: string }, AccessMode] => [{ path }, AccessMode.read ]),
     );
     const permissions = await this.permissionReader.handleSafe({ credentials, requestedModes });
     for (const path of topics) {
       if (!permissions.get({ path })?.read) {
-        throw credentials.agent?.webId ?
-          new ForbiddenHttpError(`No read access to ${path}.`) :
-          new UnauthorizedHttpError(`No read access to ${path}.`);
+        if (credentials.agent?.webId) {
+          throw new ForbiddenHttpError(`No read access to ${path}.`);
+        }
+        // The topic is the target of the error, so the response points to the authorization server and
+        // storage of the topic, for which the client needs to get an access token.
+        const error = new UnauthorizedHttpError(`No read access to ${path}.`);
+        error.metadata.add(SOLID_ERROR.terms.target, DataFactory.namedNode(path));
+        throw error;
       }
     }
   }
