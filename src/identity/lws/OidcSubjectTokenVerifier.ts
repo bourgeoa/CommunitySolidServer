@@ -2,7 +2,7 @@ import type { Quad } from '@rdfjs/types';
 import arrayifyStream from 'arrayify-stream';
 import type { Response } from 'cross-fetch';
 import { fetch } from 'cross-fetch';
-import type { JWTVerifyGetKey } from 'jose';
+import type { JWTPayload, JWTVerifyGetKey } from 'jose';
 import { createRemoteJWKSet } from 'jose';
 import { getLoggerFor } from '../../logging/LogUtil';
 import type { RepresentationConverter } from '../../storage/conversion/RepresentationConverter';
@@ -45,9 +45,37 @@ export interface OidcSubjectTokenVerifierArgs {
    */
   acceptSolidOidcIssuer?: boolean;
   /**
+   * Whether ID tokens need to be restricted to this authorization server.
+   * In that case, an ID token is only accepted if its `aud` claim includes the authorization server,
+   * or if it is sender-constrained with a `cnf` claim and the client proves possession of that key.
+   *
+   * A regular ID token, which only has the client as audience, can be presented by anyone who obtained it,
+   * such as a malicious authorization server the client was directed to.
+   * Enabling this prevents such tokens from being replayed here,
+   * but rejects the ID tokens of identity providers that can not restrict them, which is most of them.
+   * Defaults to false.
+   */
+  requireRestrictedTokens?: boolean;
+  /**
    * Allowed clock skew in seconds. Defaults to 60.
    */
   clockTolerance?: number;
+}
+
+/**
+ * Converts an LWS client identifier to a URI.
+ * LWS, §Token Exchange: "client_id [...] MUST be a URI identifying the client."
+ * Identifiers that are not absolute URIs, such as those of dynamically registered OpenID Connect clients,
+ * are only unique for their issuer, so they are put in the fragment of the issuer URI.
+ * Client ID Metadata Documents can not have a fragment, so the result can not be mistaken for one.
+ */
+export function toClientUri(client: string, issuer: string): string {
+  if (/^[a-z][\w+.-]*:/iu.test(client)) {
+    return client;
+  }
+  const uri = new URL(issuer);
+  uri.hash = encodeURIComponent(client);
+  return uri.href;
 }
 
 /**
@@ -68,6 +96,7 @@ export class OidcSubjectTokenVerifier extends SubjectTokenVerifier {
   private readonly trustedIssuers: Set<string>;
   private readonly additionalAudiences: string[];
   private readonly acceptSolidOidcIssuer: boolean;
+  private readonly requireRestrictedTokens: boolean;
   private readonly clockTolerance: number;
   private readonly keySets = new Map<string, JWTVerifyGetKey>();
 
@@ -77,6 +106,7 @@ export class OidcSubjectTokenVerifier extends SubjectTokenVerifier {
     this.trustedIssuers = new Set((args.trustedIssuers ?? []).map(trimTrailingSlashes));
     this.additionalAudiences = args.additionalAudiences ?? [];
     this.acceptSolidOidcIssuer = args.acceptSolidOidcIssuer ?? true;
+    this.requireRestrictedTokens = args.requireRestrictedTokens ?? false;
     this.clockTolerance = args.clockTolerance ?? 60;
   }
 
@@ -86,7 +116,7 @@ export class OidcSubjectTokenVerifier extends SubjectTokenVerifier {
     }
   }
 
-  public async handle({ token, audience }: SubjectTokenVerifierInput): Promise<VerifiedSubject> {
+  public async handle({ token, audience, proofKeyThumbprint }: SubjectTokenVerifierInput): Promise<VerifiedSubject> {
     const claims = decodeUnverifiedJwt(token);
     const { iss, aud } = claims;
     let { sub, azp } = claims;
@@ -109,16 +139,43 @@ export class OidcSubjectTokenVerifier extends SubjectTokenVerifier {
       await this.verifySubjectDocument(sub, iss);
     }
 
-    await verifyJwtCredential(token, await this.getKeySet(iss), {
+    const payload = await verifyJwtCredential(token, await this.getKeySet(iss), {
       // "The aud claim SHOULD include the client identifier and any additional target audience
       // such as an authorization server." Regular ID tokens, which only have the client as audience, are accepted.
       audiences: [ audience, azp, ...this.additionalAudiences ],
       requiredClaims: [ 'sub', 'iss' ],
       clockTolerance: this.clockTolerance,
     });
+    this.verifyRestriction(payload, audience, proofKeyThumbprint);
 
     this.logger.debug(`Verified ID token of ${sub} issued by ${iss}`);
-    return { subject: sub, issuer: iss, client: azp };
+    return { subject: sub, issuer: iss, client: toClientUri(azp, iss) };
+  }
+
+  /**
+   * Verifies who may present the ID token.
+   * A sender-constrained token, with a `cnf` claim containing a `jkt` value, is only accepted
+   * if the client proved possession of that key with a DPoP proof.
+   * Other tokens are accepted if they are restricted to this authorization server,
+   * or if `requireRestrictedTokens` is false.
+   */
+  protected verifyRestriction(payload: JWTPayload, audience: string, proofKeyThumbprint?: string): void {
+    const { cnf } = payload;
+    if (cnf !== undefined) {
+      if (!isJsonObject(cnf) || typeof cnf.jkt !== 'string') {
+        throw new BadRequestHttpError('Only cnf claims with a jkt value are supported.');
+      }
+      if (cnf.jkt !== proofKeyThumbprint) {
+        throw new BadRequestHttpError('The ID token is sender-constrained: a DPoP proof with its key is required.');
+      }
+      return;
+    }
+    const audiences = Array.isArray(payload.aud) ? payload.aud : [ payload.aud ];
+    if (this.requireRestrictedTokens && !audiences.includes(audience)) {
+      throw new BadRequestHttpError(
+        `The audience of the ID token needs to include ${audience}, or the token needs to be sender-constrained.`,
+      );
+    }
   }
 
   /**

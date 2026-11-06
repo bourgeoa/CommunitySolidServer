@@ -174,6 +174,7 @@ export * from './identity/configuration/ProviderFactory';
 // Identity/LWS
 export * from './identity/lws/CidSubjectTokenVerifier';
 export * from './identity/lws/DidKeySubjectTokenVerifier';
+export * from './identity/lws/DpopUtil';
 export * from './identity/lws/JwtCredentialUtil';
 export * from './identity/lws/LwsAccessTokenIssuer';
 export * from './identity/lws/LwsAuthorizationServerMetadataHttpHandler';

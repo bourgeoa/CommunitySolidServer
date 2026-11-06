@@ -31,6 +31,12 @@ export interface SubjectTokenVerifierInput {
    * If the token has an audience restriction, it needs to include this value.
    */
   audience: string;
+  /**
+   * The JWK SHA-256 thumbprint of the key the client proved possession of with a DPoP proof (RFC 9449),
+   * in case the token request contained a valid one.
+   * Verifiers use this to check sender-constrained subject tokens, which have a `cnf` claim.
+   */
+  proofKeyThumbprint?: string;
 }
 
 /**

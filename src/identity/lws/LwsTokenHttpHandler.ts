@@ -10,7 +10,9 @@ import { APPLICATION_JSON, APPLICATION_X_WWW_FORM_URLENCODED } from '../../util/
 import { createErrorMessage } from '../../util/errors/ErrorUtil';
 import { NotImplementedHttpError } from '../../util/errors/NotImplementedHttpError';
 import { parseContentType } from '../../util/HeaderUtil';
+import { joinUrl } from '../../util/PathUtil';
 import { readableToString } from '../../util/StreamUtil';
+import { verifyDpopProof } from './DpopUtil';
 import type { LwsAccessTokenIssuer } from './LwsAccessTokenIssuer';
 import type { SubjectTokenVerifier } from './SubjectTokenVerifier';
 
@@ -51,6 +53,11 @@ export interface LwsTokenHttpHandlerArgs {
    * Used to verify that the requested storage exists.
    */
   resourceSet: ResourceSet;
+  /**
+   * The path of the token endpoint, relative to the authorization server identifier.
+   * Used to verify the `htu` claim of DPoP proofs. Defaults to `.well-known/lws/token`.
+   */
+  tokenPath?: string;
 }
 
 /**
@@ -65,6 +72,11 @@ export interface LwsTokenHttpHandlerArgs {
  * an unknown or untrusted storage."
  *
  * Errors are returned as described in Section 5.2 of RFC 6749.
+ *
+ * In case the request contains a DPoP proof (RFC 9449), the proof is verified,
+ * and the thumbprint of its key is passed to the verifier,
+ * so sender-constrained subject tokens can only be exchanged by the client holding their key.
+ * The issued access token is still a bearer token, as LWS requires.
  */
 export class LwsTokenHttpHandler extends HttpHandler {
   protected readonly logger = getLoggerFor(this);
@@ -73,6 +85,7 @@ export class LwsTokenHttpHandler extends HttpHandler {
   private readonly verifier: SubjectTokenVerifier;
   private readonly storageStrategy: StorageLocationStrategy;
   private readonly resourceSet: ResourceSet;
+  private readonly tokenEndpoint: string;
 
   public constructor(args: LwsTokenHttpHandlerArgs) {
     super();
@@ -80,6 +93,7 @@ export class LwsTokenHttpHandler extends HttpHandler {
     this.verifier = args.verifier;
     this.storageStrategy = args.storageStrategy;
     this.resourceSet = args.resourceSet;
+    this.tokenEndpoint = joinUrl(this.issuer.issuer, args.tokenPath ?? '.well-known/lws/token');
   }
 
   public async handle({ request, response }: HttpHandlerInput): Promise<void> {
@@ -88,8 +102,9 @@ export class LwsTokenHttpHandler extends HttpHandler {
       if (!contentType || parseContentType(contentType).value !== APPLICATION_X_WWW_FORM_URLENCODED) {
         throw new OAuthError('invalid_request', `Token requests need to use ${APPLICATION_X_WWW_FORM_URLENCODED}.`);
       }
+      const proofKeyThumbprint = await this.verifyProof(request);
       const params = new URLSearchParams(await readableToString(request));
-      const body = await this.exchange(params);
+      const body = await this.exchange(params, proofKeyThumbprint);
       this.writeJson(response, 200, body);
     } catch (error: unknown) {
       if (error instanceof OAuthError) {
@@ -104,7 +119,7 @@ export class LwsTokenHttpHandler extends HttpHandler {
   /**
    * Validates the token request and issues an access token.
    */
-  protected async exchange(params: URLSearchParams): Promise<Record<string, unknown>> {
+  protected async exchange(params: URLSearchParams, proofKeyThumbprint?: string): Promise<Record<string, unknown>> {
     const grantType = this.getParameter(params, 'grant_type');
     if (grantType !== GRANT_TYPE_TOKEN_EXCHANGE) {
       throw new OAuthError('unsupported_grant_type', `Only the ${GRANT_TYPE_TOKEN_EXCHANGE} grant type is supported.`);
@@ -116,7 +131,7 @@ export class LwsTokenHttpHandler extends HttpHandler {
 
     let subject: Awaited<ReturnType<SubjectTokenVerifier['handle']>>;
     try {
-      subject = await this.verifier.handleSafe({ token, tokenType, audience: this.issuer.issuer });
+      subject = await this.verifier.handleSafe({ token, tokenType, audience: this.issuer.issuer, proofKeyThumbprint });
     } catch (error: unknown) {
       if (NotImplementedHttpError.isInstance(error)) {
         throw new OAuthError('invalid_request', `Unsupported subject token: ${error.message}`);
@@ -132,6 +147,24 @@ export class LwsTokenHttpHandler extends HttpHandler {
       token_type: 'Bearer',
       expires_in: this.issuer.lifetime,
     };
+  }
+
+  /**
+   * Verifies the DPoP proof of the request, if there is one, and returns the thumbprint of its key.
+   */
+  private async verifyProof(request: HttpHandlerInput['request']): Promise<string | undefined> {
+    const proof = request.headers.dpop;
+    if (proof === undefined) {
+      return;
+    }
+    if (typeof proof !== 'string') {
+      throw new OAuthError('invalid_dpop_proof', 'Only a single DPoP header is allowed.');
+    }
+    try {
+      return await verifyDpopProof(proof, 'POST', this.tokenEndpoint);
+    } catch (error: unknown) {
+      throw new OAuthError('invalid_dpop_proof', createErrorMessage(error));
+    }
   }
 
   /**

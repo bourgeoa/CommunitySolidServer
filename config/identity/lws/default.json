@@ -73,7 +73,8 @@
             "issuer": { "@id": "urn:solid-server:default:LwsAccessTokenIssuer" },
             "verifier": { "@id": "urn:solid-server:default:SubjectTokenVerifier" },
             "storageStrategy": { "@id": "urn:solid-server:default:StorageLocationStrategy" },
-            "resourceSet": { "@id": "urn:solid-server:default:CachedResourceSet" }
+            "resourceSet": { "@id": "urn:solid-server:default:CachedResourceSet" },
+            "tokenPath": ".well-known/lws/token"
           }
         },
         {

@@ -10,11 +10,20 @@ import type { ResourceSet } from '../../../../src/storage/ResourceSet';
 import { BadRequestHttpError } from '../../../../src/util/errors/BadRequestHttpError';
 import { NotImplementedHttpError } from '../../../../src/util/errors/NotImplementedHttpError';
 import { guardedStreamFrom } from '../../../../src/util/StreamUtil';
+import { verifyDpopProof } from '../../../../src/identity/lws/DpopUtil';
 
-function createRequest(body: string, contentType = 'application/x-www-form-urlencoded'): HttpRequest {
+jest.mock('../../../../src/identity/lws/DpopUtil', (): any => ({
+  verifyDpopProof: jest.fn(),
+}));
+
+function createRequest(body: string, contentType = 'application/x-www-form-urlencoded', dpop?: string | string[]):
+HttpRequest {
   const request = guardedStreamFrom(body) as HttpRequest;
   request.method = 'POST';
   request.headers = contentType ? { 'content-type': contentType } : {};
+  if (dpop) {
+    request.headers.dpop = dpop as string;
+  }
   return request;
 }
 
@@ -35,6 +44,8 @@ describe('An LwsTokenHttpHandler', (): void => {
   }
 
   beforeEach(async(): Promise<void> => {
+    jest.mocked(verifyDpopProof).mockReset();
+    jest.mocked(verifyDpopProof).mockResolvedValue('thumbprint');
     params = {
       grant_type: GRANT_TYPE_TOKEN_EXCHANGE,
       resource: storage,
@@ -84,6 +95,7 @@ describe('An LwsTokenHttpHandler', (): void => {
     expect(verifier.handleSafe).toHaveBeenCalledTimes(1);
     expect(verifier.handleSafe)
       .toHaveBeenLastCalledWith({ token: 'token', tokenType: TOKEN_TYPE_JWT, audience: 'https://as.example/' });
+    expect(verifyDpopProof).toHaveBeenCalledTimes(0);
     expect(storageStrategy.getStorageIdentifier).toHaveBeenLastCalledWith({ path: storage });
     expect(resourceSet.hasResource).toHaveBeenLastCalledWith({ path: storage });
     expect(issuer.issue).toHaveBeenLastCalledWith(subject.subject, subject.client, storage);
@@ -169,6 +181,39 @@ describe('An LwsTokenHttpHandler', (): void => {
     });
     expectHeaders(400);
     expect(issuer.issue).toHaveBeenCalledTimes(0);
+  });
+
+  it('passes the key of a valid DPoP proof to the verifier.', async(): Promise<void> => {
+    const body = new URLSearchParams(params).toString();
+    await handler.handle({ request: createRequest(body, undefined, 'proof'), response });
+    expectHeaders(200);
+    expect(verifyDpopProof).toHaveBeenLastCalledWith('proof', 'POST', 'https://as.example/.well-known/lws/token');
+    expect(verifier.handleSafe).toHaveBeenLastCalledWith({
+      token: 'token',
+      tokenType: TOKEN_TYPE_JWT,
+      audience: 'https://as.example/',
+      proofKeyThumbprint: 'thumbprint',
+    });
+
+    handler = new LwsTokenHttpHandler({ issuer, verifier, storageStrategy, resourceSet, tokenPath: 'token' });
+    response = createResponse();
+    await handler.handle({ request: createRequest(body, undefined, 'proof'), response });
+    expect(verifyDpopProof).toHaveBeenLastCalledWith('proof', 'POST', 'https://as.example/token');
+  });
+
+  it('rejects invalid DPoP proofs.', async(): Promise<void> => {
+    const body = new URLSearchParams(params).toString();
+    jest.mocked(verifyDpopProof).mockRejectedValueOnce(new BadRequestHttpError('Invalid DPoP proof: expired'));
+    await handler.handle({ request: createRequest(body, undefined, 'proof'), response });
+    expectHeaders(400);
+    expect(JSON.parse(response._getData()))
+      .toEqual({ error: 'invalid_dpop_proof', error_description: 'Invalid DPoP proof: expired' });
+
+    response = createResponse();
+    await handler.handle({ request: createRequest(body, undefined, [ 'a', 'b' ]), response });
+    expect(JSON.parse(response._getData()))
+      .toEqual({ error: 'invalid_dpop_proof', error_description: 'Only a single DPoP header is allowed.' });
+    expect(verifier.handleSafe).toHaveBeenCalledTimes(0);
   });
 
   it('throws other errors.', async(): Promise<void> => {

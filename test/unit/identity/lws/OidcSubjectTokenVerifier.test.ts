@@ -1,7 +1,7 @@
 import { fetch } from 'cross-fetch';
 import type { KeyLike } from 'jose';
 import { createRemoteJWKSet, generateKeyPair, SignJWT } from 'jose';
-import { OidcSubjectTokenVerifier } from '../../../../src/identity/lws/OidcSubjectTokenVerifier';
+import { OidcSubjectTokenVerifier, toClientUri } from '../../../../src/identity/lws/OidcSubjectTokenVerifier';
 import {
   TOKEN_TYPE_ID_TOKEN,
   TOKEN_TYPE_ID_TOKEN_ALT,
@@ -173,6 +173,50 @@ describe('An OidcSubjectTokenVerifier', (): void => {
       verifier = new OidcSubjectTokenVerifier({ converter, clockTolerance: 300 });
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience }))
         .resolves.toEqual({ subject, issuer, client });
+    });
+
+    it('converts client identifiers that are not URIs.', async(): Promise<void> => {
+      const token = await sign({ sub: subject, iss: issuer, azp: 'abc def' });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience }))
+        .resolves.toEqual({ subject, issuer, client: 'https://idp.example/#abc%20def' });
+      expect(toClientUri('urn:example:client', issuer)).toBe('urn:example:client');
+    });
+
+    it('requires a DPoP proof with the key of sender-constrained ID tokens.', async(): Promise<void> => {
+      const token = await sign({ sub: subject, iss: issuer, azp: client, cnf: { jkt: 'thumbprint' }});
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience }))
+        .rejects.toThrow('a DPoP proof with its key is required');
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience, proofKeyThumbprint: 'other' }))
+        .rejects.toThrow('a DPoP proof with its key is required');
+      await expect(verifier.handle({
+        token,
+        tokenType: TOKEN_TYPE_ID_TOKEN,
+        audience,
+        proofKeyThumbprint: 'thumbprint',
+      })).resolves.toEqual({ subject, issuer, client });
+    });
+
+    it('rejects unsupported cnf claims.', async(): Promise<void> => {
+      const token = await sign({ sub: subject, iss: issuer, azp: client, cnf: { 'x5t#S256': 'thumbprint' }});
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience }))
+        .rejects.toThrow('Only cnf claims with a jkt value are supported.');
+    });
+
+    it('can require ID tokens to be restricted to the authorization server.', async(): Promise<void> => {
+      verifier = new OidcSubjectTokenVerifier({ converter, requireRestrictedTokens: true });
+      let token = await sign({ sub: subject, iss: issuer, aud: client, azp: client });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience }))
+        .rejects.toThrow(`The audience of the ID token needs to include ${audience}`);
+      token = await sign({ sub: subject, iss: issuer, aud: [ client, audience ], azp: client });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_ID_TOKEN, audience }))
+        .resolves.toEqual({ subject, issuer, client });
+      token = await sign({ sub: subject, iss: issuer, aud: client, azp: client, cnf: { jkt: 'thumbprint' }});
+      await expect(verifier.handle({
+        token,
+        tokenType: TOKEN_TYPE_ID_TOKEN,
+        audience,
+        proofKeyThumbprint: 'thumbprint',
+      })).resolves.toEqual({ subject, issuer, client });
     });
 
     describe('verifying the subject document', (): void => {
