@@ -55,4 +55,4 @@ Determines which modes are needed for requests,
 by default this is based on the used HTTP method.
 
 * *default*: Bases required modes on HTTP method.
-* *lws*: Same as *default*, but also supports JSON Merge Patch requests.
+* *lws*: Same as *default*, but also supports JSON Patch and JSON Merge Patch requests.

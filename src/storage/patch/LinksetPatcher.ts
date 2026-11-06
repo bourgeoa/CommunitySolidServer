@@ -4,28 +4,29 @@ import type { AuxiliaryIdentifierStrategy } from '../../http/auxiliary/Auxiliary
 import { BasicRepresentation } from '../../http/representation/BasicRepresentation';
 import type { Representation } from '../../http/representation/Representation';
 import { getLoggerFor } from '../../logging/LogUtil';
-import { APPLICATION_MERGE_PATCH_JSON, INTERNAL_QUADS } from '../../util/ContentTypes';
+import { INTERNAL_QUADS } from '../../util/ContentTypes';
 import { ConflictHttpError } from '../../util/errors/ConflictHttpError';
 import { InternalServerError } from '../../util/errors/InternalServerError';
 import { NotImplementedHttpError } from '../../util/errors/NotImplementedHttpError';
-import { applyJsonMergePatch } from '../../util/JsonMergePatch';
+import { applyJsonPatchDocument } from '../../util/JsonPatch';
 import { linksetToLinks, linksToLinkset } from '../../util/LinksetUtil';
 import type { LinksetMapper } from '../conversion/LinksetMapper';
-import { readJsonMergePatch } from './JsonMergePatcher';
+import { assertJsonPatchType, readJsonPatchDocument } from './JsonPatcher';
 import type { RepresentationPatcherInput } from './RepresentationPatcher';
 import { RepresentationPatcher } from './RepresentationPatcher';
 
 /**
- * Applies JSON Merge Patch documents to LWS linkset resources.
+ * Applies JSON Patch and JSON Merge Patch documents to LWS linkset resources.
  *
- * LWS, §Metadata: "Servers MUST support PATCH using `application/merge-patch+json`."
+ * LWS, §Metadata: "Servers MUST support PATCH using `application/json-patch+json`."
+ * JSON Merge Patch is also supported, as earlier drafts required it.
  *
  * The patch is applied to the linkset document as it is presented to clients,
  * after which the resulting links are converted back to RDF metadata.
  * Server-managed links, such as `up` and `type`, can not be modified and changes to them are ignored.
  * Links with an anchor other than the described resource are rejected.
  */
-export class LinksetMergePatcher extends RepresentationPatcher<Representation> {
+export class LinksetPatcher extends RepresentationPatcher<Representation> {
   protected readonly logger = getLoggerFor(this);
 
   private readonly metadataStrategy: AuxiliaryIdentifierStrategy;
@@ -38,9 +39,7 @@ export class LinksetMergePatcher extends RepresentationPatcher<Representation> {
   }
 
   public async canHandle({ identifier, patch }: RepresentationPatcherInput<Representation>): Promise<void> {
-    if (patch.metadata.contentType !== APPLICATION_MERGE_PATCH_JSON) {
-      throw new NotImplementedHttpError('Only JSON Merge Patch documents are supported.');
-    }
+    assertJsonPatchType(patch);
     if (!this.metadataStrategy.isAuxiliaryIdentifier(identifier)) {
       throw new NotImplementedHttpError('Only linkset resources are supported.');
     }
@@ -55,12 +54,12 @@ export class LinksetMergePatcher extends RepresentationPatcher<Representation> {
       throw new InternalServerError('Quad stream was expected for patching a linkset.');
     }
 
-    const patchDocument = await readJsonMergePatch(patch);
+    const patchDocument = await readJsonPatchDocument(patch);
     const subject = this.mapper.getSubject(identifier).path;
     const original = await arrayifyStream<Quad>(representation.data);
 
     const current = linksToLinkset(await this.mapper.toLinks(identifier, original), subject);
-    const patched = applyJsonMergePatch(current, patchDocument);
+    const patched = applyJsonPatchDocument(current, patchDocument, patch.metadata.contentType);
     const links = linksetToLinks(patched, identifier.path, subject);
 
     const foreign = links.find((link): boolean => link.anchor !== subject);
@@ -68,7 +67,7 @@ export class LinksetMergePatcher extends RepresentationPatcher<Representation> {
       throw new ConflictHttpError(`This linkset can only contain links with anchor ${subject}.`);
     }
 
-    this.logger.debug(`Applying JSON Merge Patch to linkset ${identifier.path}`);
+    this.logger.debug(`Applying ${patch.metadata.contentType} to linkset ${identifier.path}`);
     const quads = this.mapper.toQuads(identifier, links, original);
     return new BasicRepresentation(quads, representation.metadata, INTERNAL_QUADS);
   }

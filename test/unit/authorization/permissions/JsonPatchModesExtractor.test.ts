@@ -1,4 +1,4 @@
-import { JsonMergePatchModesExtractor } from '../../../../src/authorization/permissions/JsonMergePatchModesExtractor';
+import { JsonPatchModesExtractor } from '../../../../src/authorization/permissions/JsonPatchModesExtractor';
 import type { AccessMap } from '../../../../src/authorization/permissions/Permissions';
 import { AccessMode } from '../../../../src/authorization/permissions/Permissions';
 import type { Operation } from '../../../../src/http/Operation';
@@ -9,11 +9,11 @@ import { NotImplementedHttpError } from '../../../../src/util/errors/NotImplemen
 import { IdentifierSetMultiMap } from '../../../../src/util/map/IdentifierMap';
 import { compareMaps } from '../../../util/Util';
 
-describe('A JsonMergePatchModesExtractor', (): void => {
+describe('A JsonPatchModesExtractor', (): void => {
   const target: ResourceIdentifier = { path: 'http://example.com/foo' };
   let operation: Operation;
   let resourceSet: jest.Mocked<ResourceSet>;
-  let extractor: JsonMergePatchModesExtractor;
+  let extractor: JsonPatchModesExtractor;
 
   function getMap(modes: AccessMode[]): AccessMap {
     return new IdentifierSetMultiMap(modes.map((mode): [ResourceIdentifier, AccessMode] => [ target, mode ]));
@@ -31,10 +31,12 @@ describe('A JsonMergePatchModesExtractor', (): void => {
       hasResource: jest.fn().mockResolvedValue(true),
     };
 
-    extractor = new JsonMergePatchModesExtractor(resourceSet);
+    extractor = new JsonPatchModesExtractor(resourceSet);
   });
 
-  it('can only handle JSON Merge Patch documents.', async(): Promise<void> => {
+  it('can only handle JSON Patch and JSON Merge Patch documents.', async(): Promise<void> => {
+    await expect(extractor.canHandle(operation)).resolves.toBeUndefined();
+    operation.body = new BasicRepresentation('[]', 'application/json-patch+json');
     await expect(extractor.canHandle(operation)).resolves.toBeUndefined();
 
     operation.body = new BasicRepresentation('{}', 'application/json');

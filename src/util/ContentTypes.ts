@@ -1,5 +1,6 @@
 // Well-known content types
 export const APPLICATION_JSON = 'application/json';
+export const APPLICATION_JSON_PATCH_JSON = 'application/json-patch+json';
 export const APPLICATION_LD_JSON = 'application/ld+json';
 export const APPLICATION_LINKSET_JSON = 'application/linkset+json';
 export const APPLICATION_LWS_CID = 'application/lws+cid';

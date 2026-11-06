@@ -27,7 +27,7 @@ export * from './authorization/permissions/DeleteParentExtractor';
 export * from './authorization/permissions/IntermediateCreateExtractor';
 export * from './authorization/permissions/ModesExtractor';
 export * from './authorization/permissions/RecursiveDeleteModesExtractor';
-export * from './authorization/permissions/JsonMergePatchModesExtractor';
+export * from './authorization/permissions/JsonPatchModesExtractor';
 export * from './authorization/permissions/MethodModesExtractor';
 export * from './authorization/permissions/N3PatchModesExtractor';
 export * from './authorization/permissions/Permissions';
@@ -552,8 +552,8 @@ export * from './storage/mapping/SubdomainExtensionBasedMapper';
 // Storage/Patch
 export * from './storage/patch/ConvertingPatcher';
 export * from './storage/patch/ImmutableMetadataPatcher';
-export * from './storage/patch/JsonMergePatcher';
-export * from './storage/patch/LinksetMergePatcher';
+export * from './storage/patch/JsonPatcher';
+export * from './storage/patch/LinksetPatcher';
 export * from './storage/patch/N3Patcher';
 export * from './storage/patch/PatchHandler';
 export * from './storage/patch/RdfPatcher';
@@ -602,6 +602,7 @@ export * from './storage/RoutingResourceStore';
 
 // Util/Errors
 export * from './util/JsonMergePatch';
+export * from './util/JsonPatch';
 export * from './util/LinksetUtil';
 export * from './util/errors/BadRequestHttpError';
 export * from './util/errors/ConflictHttpError';

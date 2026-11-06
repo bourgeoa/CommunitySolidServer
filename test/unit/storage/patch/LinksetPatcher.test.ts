@@ -6,7 +6,7 @@ import { BasicRepresentation } from '../../../../src/http/representation/BasicRe
 import type { Patch } from '../../../../src/http/representation/Patch';
 import type { Representation } from '../../../../src/http/representation/Representation';
 import { LinksetMapper } from '../../../../src/storage/conversion/LinksetMapper';
-import { LinksetMergePatcher } from '../../../../src/storage/patch/LinksetMergePatcher';
+import { LinksetPatcher } from '../../../../src/storage/patch/LinksetPatcher';
 import { ConflictHttpError } from '../../../../src/util/errors/ConflictHttpError';
 import { InternalServerError } from '../../../../src/util/errors/InternalServerError';
 import { UnprocessableEntityHttpError } from '../../../../src/util/errors/UnprocessableEntityHttpError';
@@ -20,7 +20,7 @@ function getPatch(body: unknown, contentType = 'application/merge-patch+json'): 
   return new BasicRepresentation(JSON.stringify(body), contentType);
 }
 
-describe('A LinksetMergePatcher', (): void => {
+describe('A LinksetPatcher', (): void => {
   const subject = 'http://test.com/foo';
   const identifier = { path: 'http://test.com/foo.meta' };
   const metadataStrategy = new SimpleSuffixStrategy('.meta');
@@ -32,23 +32,25 @@ describe('A LinksetMergePatcher', (): void => {
   ];
   let patch: Patch;
   let representation: Representation;
-  let patcher: LinksetMergePatcher;
+  let patcher: LinksetPatcher;
 
   beforeEach(async(): Promise<void> => {
     patch = getPatch({ linkset: [{ anchor: subject, type: [{ href: 'http://example.com/New' }]}]});
     representation = new BasicRepresentation(original, identifier, 'internal/quads');
-    patcher = new LinksetMergePatcher(metadataStrategy, mapper);
+    patcher = new LinksetPatcher(metadataStrategy, mapper);
   });
 
   describe('canHandle', (): void => {
-    it('accepts JSON Merge Patch documents on linkset resources.', async(): Promise<void> => {
+    it('accepts JSON Patch and JSON Merge Patch documents on linkset resources.', async(): Promise<void> => {
+      await expect(patcher.canHandle({ identifier, patch, representation })).resolves.toBeUndefined();
+      patch = getPatch([], 'application/json-patch+json');
       await expect(patcher.canHandle({ identifier, patch, representation })).resolves.toBeUndefined();
     });
 
     it('rejects other patch types.', async(): Promise<void> => {
       patch = getPatch({}, 'application/sparql-update');
       await expect(patcher.canHandle({ identifier, patch, representation }))
-        .rejects.toThrow('Only JSON Merge Patch documents are supported.');
+        .rejects.toThrow('Only JSON Patch and JSON Merge Patch documents are supported.');
     });
 
     it('rejects other resources.', async(): Promise<void> => {
@@ -68,6 +70,26 @@ describe('A LinksetMergePatcher', (): void => {
         original[2],
         quad(namedNode(subject), RDF.terms.type, namedNode('http://example.com/New')),
       ]);
+    });
+
+    it('applies JSON Patch documents to the linkset as it is presented.', async(): Promise<void> => {
+      patch = getPatch([
+        { op: 'test', path: '/linkset/0/anchor', value: subject },
+        { op: 'test', path: '/linkset/0/type/1/href', value: 'http://example.com/Old' },
+        { op: 'replace', path: '/linkset/0/type/1/href', value: 'http://example.com/New' },
+      ], 'application/json-patch+json');
+      const result = await patcher.handle({ identifier, patch, representation });
+      const quads = await arrayifyStream<Quad>(result.data);
+      expect(quads).toEqualRdfQuadArray([
+        original[0],
+        original[2],
+        DataFactory.quad(DataFactory.namedNode(subject), RDF.terms.type, DataFactory.namedNode('http://example.com/New')),
+      ]);
+    });
+
+    it('rejects JSON Patch documents with a failing test.', async(): Promise<void> => {
+      patch = getPatch([{ op: 'test', path: '/linkset/0/anchor', value: 'http://test.com/other' }], 'application/json-patch+json');
+      await expect(patcher.handle({ identifier, patch, representation })).rejects.toThrow(ConflictHttpError);
     });
 
     it('errors if the linkset does not exist.', async(): Promise<void> => {

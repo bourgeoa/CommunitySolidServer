@@ -357,6 +357,65 @@ describe.each(combinations)('A %s server using %s', (protocol, authorization, pr
     expect(body.linkset[0].author).toEqual([{ href: 'https://example.com/alice' }]);
   });
 
+  it('modifies linksets with JSON Patch.', async(): Promise<void> => {
+    const head = await fetch(resource, { method: 'HEAD', headers: { authorization: `Bearer ${aliceToken}` }});
+    expect(head.headers.get('accept-patch')).toContain('application/json-patch+json');
+    const linkset = /<([^>]+)>; rel="linkset"/u.exec(head.headers.get('link')!)![1];
+
+    let response = await fetch(linkset, {
+      headers: { authorization: `Bearer ${aliceToken}`, accept: 'application/linkset+json' },
+    });
+    expect(response.headers.get('accept-patch')).toContain('application/json-patch+json');
+    const original = await response.json();
+    expect(original.linkset[0].author).toEqual([{ href: 'https://example.com/alice' }]);
+
+    response = await fetch(linkset, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${aliceToken}`, 'content-type': 'application/json-patch+json' },
+      body: JSON.stringify([
+        { op: 'test', path: '/linkset/0/author/0/href', value: 'https://example.com/alice' },
+        { op: 'replace', path: '/linkset/0/author/0/href', value: 'https://example.com/bob' },
+      ]),
+    });
+    expect(response.status).toBe(204);
+
+    response = await fetch(linkset, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${aliceToken}`, 'content-type': 'application/json-patch+json' },
+      body: JSON.stringify([{ op: 'test', path: '/linkset/0/author/0/href', value: 'https://example.com/alice' }]),
+    });
+    expect(response.status).toBe(409);
+
+    response = await fetch(linkset, {
+      headers: { authorization: `Bearer ${aliceToken}`, accept: 'application/linkset+json' },
+    });
+    const body = await response.json();
+    expect(body.linkset[0].author).toEqual([{ href: 'https://example.com/bob' }]);
+  });
+
+  it('modifies JSON resources with JSON Patch.', async(): Promise<void> => {
+    const json = `${container}data.json`;
+    let response = await fetch(json, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${aliceToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ items: [ 'a' ]}),
+    });
+    expect(response.status).toBe(201);
+
+    response = await fetch(json, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${aliceToken}`, 'content-type': 'application/json-patch+json' },
+      body: JSON.stringify([{ op: 'add', path: '/items/-', value: 'b' }]),
+    });
+    expect(response.status).toBe(204);
+
+    response = await fetch(json, { headers: { authorization: `Bearer ${aliceToken}` }});
+    await expect(response.json()).resolves.toEqual({ items: [ 'a', 'b' ]});
+
+    response = await fetch(json, { method: 'DELETE', headers: { authorization: `Bearer ${aliceToken}` }});
+    expect(response.status).toBe(204);
+  });
+
   it('returns 204 after modifying a resource.', async(): Promise<void> => {
     const response = await fetch(resource, {
       method: 'PUT',

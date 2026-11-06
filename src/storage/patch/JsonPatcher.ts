@@ -2,23 +2,32 @@ import { BasicRepresentation } from '../../http/representation/BasicRepresentati
 import type { Representation } from '../../http/representation/Representation';
 import { RepresentationMetadata } from '../../http/representation/RepresentationMetadata';
 import { getLoggerFor } from '../../logging/LogUtil';
-import { APPLICATION_JSON, APPLICATION_MERGE_PATCH_JSON } from '../../util/ContentTypes';
+import { APPLICATION_JSON } from '../../util/ContentTypes';
 import { BadRequestHttpError } from '../../util/errors/BadRequestHttpError';
 import { NotImplementedHttpError } from '../../util/errors/NotImplementedHttpError';
-import { applyJsonMergePatch } from '../../util/JsonMergePatch';
+import { applyJsonPatchDocument, JSON_PATCH_TYPES } from '../../util/JsonPatch';
 import { readableToString } from '../../util/StreamUtil';
 import type { RepresentationPatcherInput } from './RepresentationPatcher';
 import { RepresentationPatcher } from './RepresentationPatcher';
 
 /**
- * Parses the body of a JSON Merge Patch request.
+ * Parses the body of a JSON Patch or JSON Merge Patch request.
  * Throws a 400 error if the body is not valid JSON.
  */
-export async function readJsonMergePatch(patch: Representation): Promise<unknown> {
+export async function readJsonPatchDocument(patch: Representation): Promise<unknown> {
   try {
     return JSON.parse(await readableToString(patch.data)) as unknown;
   } catch (error: unknown) {
-    throw new BadRequestHttpError('Invalid JSON Merge Patch document.', { cause: error });
+    throw new BadRequestHttpError('Invalid JSON patch document.', { cause: error });
+  }
+}
+
+/**
+ * Throws a 501 error if the patch is not a JSON Patch or JSON Merge Patch document.
+ */
+export function assertJsonPatchType(patch: Representation): void {
+  if (!JSON_PATCH_TYPES.includes(patch.metadata.contentType!)) {
+    throw new NotImplementedHttpError('Only JSON Patch and JSON Merge Patch documents are supported.');
   }
 }
 
@@ -30,27 +39,26 @@ export function isJsonMediaType(contentType?: string): boolean {
 }
 
 /**
- * Applies JSON Merge Patch (RFC 7386) documents to JSON resources.
+ * Applies JSON Patch (RFC 6902) and JSON Merge Patch (RFC 7386) documents to JSON resources.
  *
- * LWS, §Update resource: "LWS server MUST minimally support JSON Merge Patch (application/merge-patch+json)".
+ * LWS, §Update resource: "LWS server MUST minimally support JSON Patch (`application/json-patch+json`)".
+ * JSON Merge Patch is also supported, as earlier drafts required it.
  *
  * In case the target resource does not exist yet, it will be created as an `application/json` resource.
  */
-export class JsonMergePatcher extends RepresentationPatcher<Representation> {
+export class JsonPatcher extends RepresentationPatcher<Representation> {
   protected readonly logger = getLoggerFor(this);
 
   public async canHandle({ patch, representation }: RepresentationPatcherInput<Representation>): Promise<void> {
-    if (patch.metadata.contentType !== APPLICATION_MERGE_PATCH_JSON) {
-      throw new NotImplementedHttpError('Only JSON Merge Patch documents are supported.');
-    }
+    assertJsonPatchType(patch);
     if (representation && !isJsonMediaType(representation.metadata.contentType)) {
-      throw new NotImplementedHttpError('JSON Merge Patch can only be applied to JSON resources.');
+      throw new NotImplementedHttpError('JSON patches can only be applied to JSON resources.');
     }
   }
 
   public async handle({ identifier, patch, representation }: RepresentationPatcherInput<Representation>):
   Promise<Representation> {
-    const patchDocument = await readJsonMergePatch(patch);
+    const patchDocument = await readJsonPatchDocument(patch);
 
     let target: unknown;
     let metadata: RepresentationMetadata;
@@ -66,8 +74,8 @@ export class JsonMergePatcher extends RepresentationPatcher<Representation> {
       metadata = new RepresentationMetadata(identifier, APPLICATION_JSON);
     }
 
-    this.logger.debug(`Applying JSON Merge Patch to ${identifier.path}`);
-    const result = applyJsonMergePatch(target, patchDocument);
+    this.logger.debug(`Applying ${patch.metadata.contentType} to ${identifier.path}`);
+    const result = applyJsonPatchDocument(target, patchDocument, patch.metadata.contentType);
     return new BasicRepresentation(JSON.stringify(result), metadata);
   }
 }

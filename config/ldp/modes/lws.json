@@ -2,7 +2,7 @@
   "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
   "@graph": [
     {
-      "comment": "Caches the requested modes based on the incoming operation. Also supports the JSON Merge Patch documents and recursive deletes of LWS.",
+      "comment": "Caches the requested modes based on the incoming operation. Also supports the JSON Patch and JSON Merge Patch documents and recursive deletes of LWS.",
       "@id": "urn:solid-server:default:ModesExtractor",
       "@type": "CachedHandler",
       "source": {
@@ -64,7 +64,7 @@
               "resourceSet": { "@id": "urn:solid-server:default:CachedResourceSet" }
             },
             {
-              "@type": "JsonMergePatchModesExtractor",
+              "@type": "JsonPatchModesExtractor",
               "resourceSet": { "@id": "urn:solid-server:default:CachedResourceSet" }
             },
             {

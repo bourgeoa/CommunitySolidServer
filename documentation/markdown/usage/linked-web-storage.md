@@ -54,7 +54,8 @@ next to the LDP container types.
 
 Responses contain the `up`, `type`, and `linkset` links required by LWS,
 and successful modifications return `204 No Content`.
-JSON resources can be modified with [JSON Merge Patch](https://www.rfc-editor.org/rfc/rfc7386) requests.
+JSON resources can be modified with [JSON Patch](https://www.rfc-editor.org/rfc/rfc6902)
+and [JSON Merge Patch](https://www.rfc-editor.org/rfc/rfc7386) requests.
 
 ## Linksets
 
@@ -62,8 +63,10 @@ The metadata of a resource is exposed as a [linkset](https://www.rfc-editor.org/
 linked from the resource with `rel="linkset"`.
 This is the same resource as the [description resource](metadata.md) of the resource,
 which can be requested as `application/linkset+json`,
-and modified with a JSON Merge Patch request on that linkset.
-Server-managed links, such as the containment triples, can not be modified.
+and modified with a JSON Patch or JSON Merge Patch request on that linkset.
+JSON Patch paths refer to positions in the linkset as it is returned by a `GET` request.
+Server-managed links, such as `up` and the containment triples, can not be modified,
+so resources can not be moved by changing their `up` link.
 
 ## Authorization
 
