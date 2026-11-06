@@ -166,6 +166,10 @@ describe('An LwsAccessTokenExtractor', (): void => {
         if (path.startsWith(storage)) {
           return { path: storage };
         }
+        // Like the pod strategy, which takes the first path segment as the storage
+        if (path.startsWith('https://storage.example/.notifications/')) {
+          return { path: 'https://storage.example/.notifications/' };
+        }
         throw new Error('no storage');
       });
       const token = await issuer.issue(subject, client, storage);

@@ -206,6 +206,7 @@ describe('A ContainerToLwsJsonConverter', (): void => {
         DF.quad(DF.namedNode(`${c}a/`), DC.terms.modified, DF.literal('2024-01-02T03:04:05Z')),
         DF.quad(DF.namedNode(`${c}b`), CONTENT_TYPE_TERM, DF.literal('text/turtle')),
         DF.quad(DF.namedNode(`${c}b`), POSIX.terms.size, DF.literal('123')),
+        DF.quad(DF.namedNode(`${c}b`), DC.terms.modified, DF.literal('2024-01-02T03:04:06Z')),
       ], 'internal/quads', false);
     });
 
@@ -250,11 +251,28 @@ describe('A ContainerToLwsJsonConverter', (): void => {
         DF.quad(DF.namedNode(c), LWS.terms.totalItems, DF.literal('2', XSD.terms.integer)),
         DF.quad(DF.namedNode(c), LWS.terms.items, DF.namedNode(`${c}a/`)),
         DF.quad(DF.namedNode(c), LWS.terms.items, DF.namedNode(`${c}b`)),
+        // The LWS context does not define modified on containers
         DF.quad(DF.namedNode(`${c}a/`), RDF.terms.type, LWS.terms.Container),
-        DF.quad(DF.namedNode(`${c}a/`), DC.terms.modified, DF.literal('2024-01-02T03:04:05.000Z', XSD.terms.dateTime)),
         DF.quad(DF.namedNode(`${c}b`), RDF.terms.type, LWS.terms.DataResource),
+        DF.quad(DF.namedNode(`${c}b`), DC.terms.modified, DF.literal('2024-01-02T03:04:06.000Z', XSD.terms.dateTime)),
         DF.quad(DF.namedNode(`${c}b`), DC.terms.format, DF.literal('text/turtle')),
         DF.quad(DF.namedNode(`${c}b`), SCHEMA.terms.size, DF.literal('123', XSD.terms.long)),
+      ]);
+    });
+
+    it('only serializes the metadata data resources have.', async(): Promise<void> => {
+      representation = new BasicRepresentation([
+        DF.quad(DF.namedNode(c), LDP.terms.contains, DF.namedNode(`${c}b`)),
+      ], 'internal/quads', false);
+      const preferences = profiled('text/turtle');
+      const result = await converter.handle({ identifier: container, representation, preferences });
+      const quads = new Parser().parse(await readableToString(result.data));
+      expect(quads).toBeRdfIsomorphic([
+        DF.quad(DF.namedNode(c), RDF.terms.type, LWS.terms.Container),
+        DF.quad(DF.namedNode(c), LWS.terms.totalItems, DF.literal('1', XSD.terms.integer)),
+        DF.quad(DF.namedNode(c), LWS.terms.items, DF.namedNode(`${c}b`)),
+        DF.quad(DF.namedNode(`${c}b`), RDF.terms.type, LWS.terms.DataResource),
+        DF.quad(DF.namedNode(`${c}b`), DC.terms.format, DF.literal('application/octet-stream')),
       ]);
     });
 

@@ -158,7 +158,53 @@ describe('A CidSubjectTokenVerifier', (): void => {
     it('errors if there is no matching verification method.', async(): Promise<void> => {
       const token = await sign(claims, { kid: '#missing' });
       await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
-        .rejects.toThrow(`${subject} has no verification method ${subject}#missing.`);
+        .rejects.toThrow(`${subject} has no authentication verification method ${subject}#missing.`);
+    });
+
+    it('errors if the verification method is not one of the authentication relationship.', async(): Promise<void> => {
+      document.authentication = [ `${subject}#unused` ];
+      document.assertionMethod = [ keyId ];
+      const token = await sign(claims);
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`${subject} has no authentication verification method ${keyId}.`);
+    });
+
+    it('accepts relative references to verification methods.', async(): Promise<void> => {
+      document.authentication = [ '#key-1' ];
+      document.verificationMethod = [
+        { id: '#key-1', type: 'JsonWebKey', controller: subject, publicKeyJwk: publicJwk },
+      ];
+      const token = await sign(claims, { kid: keyId });
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience })).resolves.toBeDefined();
+    });
+
+    it('errors if the referenced verification method has no key.', async(): Promise<void> => {
+      document.verificationMethod = { id: keyId, type: 'JsonWebKey' };
+      const token = await sign(claims);
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`${subject} has no authentication verification method ${keyId}.`);
+    });
+
+    it('errors if the verification method is revoked or expired.', async(): Promise<void> => {
+      const method = { id: keyId, type: 'JsonWebKey', controller: subject, publicKeyJwk: publicJwk };
+      document.verificationMethod = { ...method, revoked: '2000-01-01T00:00:00Z' };
+      const token = await sign(claims);
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`The verification method ${keyId} is revoked.`);
+      document.verificationMethod = { ...method, expires: 'not a date' };
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`The verification method ${keyId} is expired.`);
+      document.verificationMethod = { ...method, expires: '2999-01-01T00:00:00Z', revoked: 5 };
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience }))
+        .rejects.toThrow(`The verification method ${keyId} is revoked.`);
+      document.verificationMethod = { ...method, expires: '2999-01-01T00:00:00Z' };
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience })).resolves.toBeDefined();
+    });
+
+    it('ignores invalid identifiers.', async(): Promise<void> => {
+      document.authentication = [ 'http://[invalid', 5, keyId ];
+      const token = await sign(claims);
+      await expect(verifier.handle({ token, tokenType: TOKEN_TYPE_JWT, audience })).resolves.toBeDefined();
     });
 
     it('errors if the key can not be imported.', async(): Promise<void> => {

@@ -134,12 +134,12 @@ export class LwsAccessTokenExtractor extends CredentialsExtractor {
       throw this.createError('The audience of an LWS access token needs to contain exactly one value.');
     }
     const target = await this.targetExtractor.handleSafe({ request });
-    const storage = await this.findStorage(target.path);
-    // Server-wide services accept tokens for any storage on this server
-    const valid = storage ?
-      audiences[0] === storage :
-      this.serviceUrls.some((url): boolean => target.path.startsWith(url)) &&
-      await this.findStorage(audiences[0]) === audiences[0];
+    // Server-wide services accept tokens for any storage on this server.
+    // They are checked first, as some storage strategies, such as the pod strategy,
+    // derive a storage from the URL of any resource.
+    const valid = this.serviceUrls.some((url): boolean => target.path.startsWith(url)) ?
+      await this.findStorage(audiences[0]) === audiences[0] :
+      audiences[0] === await this.findStorage(target.path);
     if (!valid) {
       throw this.createError(`The LWS access token is not intended for the storage containing ${target.path}.`);
     }

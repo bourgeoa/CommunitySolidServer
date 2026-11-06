@@ -9,11 +9,19 @@ import { ConflictHttpError } from '../../util/errors/ConflictHttpError';
 import { InternalServerError } from '../../util/errors/InternalServerError';
 import { NotImplementedHttpError } from '../../util/errors/NotImplementedHttpError';
 import { applyJsonPatchDocument } from '../../util/JsonPatch';
+import type { Link } from '../../util/LinksetUtil';
 import { linksetToLinks, linksToLinkset } from '../../util/LinksetUtil';
 import type { LinksetMapper } from '../conversion/LinksetMapper';
 import { assertJsonPatchType, readJsonPatchDocument } from './JsonPatcher';
 import type { RepresentationPatcherInput } from './RepresentationPatcher';
 import { RepresentationPatcher } from './RepresentationPatcher';
+
+/**
+ * Returns the sorted, unique targets of the `up` links.
+ */
+function getUpLinks(links: Link[]): string[] {
+  return [ ...new Set(links.filter((link): boolean => link.rel === 'up').map((link): string => link.href)) ].sort();
+}
 
 /**
  * Applies JSON Patch and JSON Merge Patch documents to LWS linkset resources.
@@ -23,7 +31,10 @@ import { RepresentationPatcher } from './RepresentationPatcher';
  *
  * The patch is applied to the linkset document as it is presented to clients,
  * after which the resulting links are converted back to RDF metadata.
- * Server-managed links, such as `up` and `type`, can not be modified and changes to them are ignored.
+ * Server-managed links, such as `up` and `type`, can not be modified and leaving them out has no effect.
+ * Changing the `up` links would move the resource, which is not supported, so such patches are rejected:
+ * LWS, §Moving Resources: "A server that does not allow it MUST reject the request with an appropriate 4xx status
+ * code, such as 409 Conflict".
  * Links with an anchor other than the described resource are rejected.
  */
 export class LinksetPatcher extends RepresentationPatcher<Representation> {
@@ -58,13 +69,20 @@ export class LinksetPatcher extends RepresentationPatcher<Representation> {
     const subject = this.mapper.getSubject(identifier).path;
     const original = await arrayifyStream<Quad>(representation.data);
 
-    const current = linksToLinkset(await this.mapper.toLinks(identifier, original), subject);
+    const currentLinks = await this.mapper.toLinks(identifier, original);
+    const current = linksToLinkset(currentLinks, subject);
     const patched = applyJsonPatchDocument(current, patchDocument, patch.metadata.contentType);
     const links = linksetToLinks(patched, identifier.path, subject);
 
     const foreign = links.find((link): boolean => link.anchor !== subject);
     if (foreign) {
       throw new ConflictHttpError(`This linkset can only contain links with anchor ${subject}.`);
+    }
+
+    const currentUp = getUpLinks(currentLinks);
+    const patchedUp = getUpLinks(links);
+    if (patchedUp.length > 0 && patchedUp.join(' ') !== currentUp.join(' ')) {
+      throw new ConflictHttpError('Moving resources by changing their up link is not supported.');
     }
 
     this.logger.debug(`Applying ${patch.metadata.contentType} to linkset ${identifier.path}`);

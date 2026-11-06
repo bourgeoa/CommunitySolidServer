@@ -11,6 +11,29 @@ import type { SubjectTokenVerifierInput, VerifiedSubject } from './SubjectTokenV
 import { SubjectTokenVerifier, TOKEN_TYPE_JWT } from './SubjectTokenVerifier';
 
 /**
+ * Resolves a, possibly relative, identifier in a controlled identifier document.
+ * Returns undefined for values that are not valid identifiers.
+ */
+function resolveId(id: unknown, base: string): string | undefined {
+  try {
+    return typeof id === 'string' ? new URL(id, base).href : undefined;
+  } catch {
+    // Invalid identifiers do not match any key
+  }
+}
+
+/**
+ * Returns the identifier of an entry of a verification relationship: either a reference or an embedded method.
+ */
+function getId(entry: unknown, base: string): string | undefined {
+  return resolveId(isJsonObject(entry) ? entry.id : entry, base);
+}
+
+function toArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [ value ];
+}
+
+/**
  * Validates self-issued JWT credentials of agents identified by an HTTPS URI,
  * as described by the LWS 1.0 Authentication Suite: Self-issued Identity using Controlled Identifiers.
  *
@@ -97,17 +120,28 @@ export class CidSubjectTokenVerifier extends SubjectTokenVerifier {
 
     // The kid is either the full identifier of the verification method, or its fragment
     const keyId = /^[a-z][\w+.-]*:/iu.test(kid) ? kid : `${subject}#${kid.replace(/^#/u, '')}`;
-    const methods = [ document.authentication, document.verificationMethod ]
-      .flatMap((value): unknown[] => Array.isArray(value) ? value : [ value ]);
-    for (const method of methods) {
-      if (!isJsonObject(method) || method.id !== keyId || !isJsonObject(method.publicKeyJwk)) {
-        continue;
-      }
-      if (method.controller !== undefined && method.controller !== subject) {
-        throw new BadRequestHttpError(`The verification method ${keyId} is not controlled by ${subject}.`);
-      }
-      return method.publicKeyJwk as JWK;
+    // CID 1.0, §3.3: the method needs to be one of the authentication verification relationship,
+    // either embedded in it or referenced from it.
+    const authentication = toArray(document.authentication);
+    if (!authentication.some((entry): boolean => getId(entry, subject) === keyId)) {
+      throw new BadRequestHttpError(`${subject} has no authentication verification method ${keyId}.`);
     }
-    throw new BadRequestHttpError(`${subject} has no verification method ${keyId}.`);
+    const method = [ ...authentication, ...toArray(document.verificationMethod) ]
+      .find((entry): boolean =>
+        isJsonObject(entry) && isJsonObject(entry.publicKeyJwk) && getId(entry, subject) === keyId);
+    if (!isJsonObject(method)) {
+      throw new BadRequestHttpError(`${subject} has no authentication verification method ${keyId}.`);
+    }
+    if (method.controller !== undefined && resolveId(method.controller, subject) !== subject) {
+      throw new BadRequestHttpError(`The verification method ${keyId} is not controlled by ${subject}.`);
+    }
+    // CID 1.0, §2.2: methods are not used after their revoked or expires time
+    for (const [ bound, state ] of [[ 'revoked', 'revoked' ], [ 'expires', 'expired' ]]) {
+      const time = method[bound];
+      if (time !== undefined && !(typeof time === 'string' && Date.parse(time) > Date.now())) {
+        throw new BadRequestHttpError(`The verification method ${keyId} is ${state}.`);
+      }
+    }
+    return method.publicKeyJwk as JWK;
   }
 }

@@ -113,6 +113,22 @@ describe('A LinksetPatcher', (): void => {
       await expect(result).rejects.toThrow(`This linkset can only contain links with anchor ${subject}.`);
     });
 
+    it('rejects patches that change the up link.', async(): Promise<void> => {
+      patch = getPatch([
+        { op: 'add', path: '/linkset/0/up', value: [{ href: 'http://test.com/other/' }]},
+      ], 'application/json-patch+json');
+      await expect(patcher.handle({ identifier, patch, representation }))
+        .rejects.toThrow('Moving resources by changing their up link is not supported.');
+    });
+
+    it('accepts patches that keep the up link.', async(): Promise<void> => {
+      patch = getPatch([
+        { op: 'test', path: '/linkset/0/up', value: [{ href: 'http://test.com/' }]},
+        { op: 'add', path: '/linkset/0/up/-', value: { href: 'http://test.com/' }},
+      ], 'application/json-patch+json');
+      await expect(patcher.handle({ identifier, patch, representation })).resolves.toBeDefined();
+    });
+
     it('rejects patches resulting in an invalid linkset.', async(): Promise<void> => {
       patch = getPatch({ linkset: 'invalid' });
       await expect(patcher.handle({ identifier, patch, representation }))
