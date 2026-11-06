@@ -23,6 +23,8 @@ export class UnionPreferenceParser extends UnionHandler<PreferenceParser> {
       for (const key of Object.keys(result) as (keyof RepresentationPreferences)[]) {
         if (key === 'range') {
           preferences[key] = result[key];
+        } else if (key === 'profiles') {
+          preferences[key] = { ...preferences[key], ...result[key] };
         } else {
           preferences[key] = { ...preferences[key], ...result[key] };
         }

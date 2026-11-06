@@ -1,18 +1,25 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import type { NamedNode, Quad, Term } from '@rdfjs/types';
-import { DataFactory } from 'n3';
+import { DataFactory, Writer } from 'n3';
 import { LWS_PAGE_UNIT } from '../../http/input/preferences/LwsPagePreferenceParser';
 import { BasicRepresentation } from '../../http/representation/BasicRepresentation';
 import type { Representation } from '../../http/representation/Representation';
 import { RepresentationMetadata } from '../../http/representation/RepresentationMetadata';
 import type { ValuePreferences } from '../../http/representation/RepresentationPreferences';
-import { APPLICATION_JSON, APPLICATION_LD_JSON, APPLICATION_LWS_JSON, INTERNAL_QUADS } from '../../util/ContentTypes';
+import {
+  APPLICATION_JSON,
+  APPLICATION_LD_JSON,
+  APPLICATION_LWS_JSON,
+  INTERNAL_QUADS,
+  TEXT_TURTLE,
+} from '../../util/ContentTypes';
+import { ContentType } from '../../util/Header';
 import { NotFoundHttpError } from '../../util/errors/NotFoundHttpError';
 import { NotImplementedHttpError } from '../../util/errors/NotImplementedHttpError';
 import { IANA_RELATION_NAMESPACE } from '../../util/LinksetUtil';
 import { isContainerPath } from '../../util/PathUtil';
 import { readableToQuads } from '../../util/StreamUtil';
-import { CONTENT_TYPE, CONTENT_TYPE_TERM, DC, IANA, LDP, POSIX, RDF } from '../../util/Vocabularies';
+import { CONTENT_TYPE, CONTENT_TYPE_TERM, DC, IANA, LDP, LWS, POSIX, RDF, SCHEMA, XSD } from '../../util/Vocabularies';
 import { BaseTypedRepresentationConverter } from './BaseTypedRepresentationConverter';
 import { cleanPreferences, getConversionTarget, getTypeWeight, matchesMediaType } from './ConversionUtil';
 import type { RepresentationConverterArgs } from './RepresentationConverter';
@@ -21,6 +28,22 @@ import type { RepresentationConverterArgs } from './RepresentationConverter';
  * The JSON-LD context of LWS container representations.
  */
 export const LWS_CONTEXT = 'https://www.w3.org/ns/lws/v1';
+
+/**
+ * The URI of the LWS profile, which can be requested with the `profile` parameter of RDF media types.
+ */
+export const LWS_PROFILE = 'https://www.w3.org/ns/lws/v1';
+
+/**
+ * The RDF media types in which the LWS profile is produced by default.
+ */
+export const LWS_PROFILE_TYPES = [
+  APPLICATION_LD_JSON,
+  TEXT_TURTLE,
+  'application/n-triples',
+  'application/trig',
+  'application/n-quads',
+];
 
 /**
  * The link relations used for pagination links, as IANA relation URIs.
@@ -77,6 +100,14 @@ export interface LwsContainerRepresentation {
  *    so requests that only match through wildcards are rejected.
  *    This allows servers to keep a different default representation for containers.
  *
+ * Clients can also request the LWS profile in one of the `profileTypes`, such as
+ * `Accept: text/turtle; profile="https://www.w3.org/ns/lws/v1"`.
+ * LWS, §Content Negotiation: "If the server selects such a media type, the response MUST conform to the LWS profile,
+ * that is, it MUST be RDF isomorphic to the `application/lws+json` representation,
+ * and its `Content-Type` MUST include the same `profile` parameter."
+ * Such a request is accepted if no other media type has a higher weight,
+ * whatever the values of `strictPreferences` and `requireExplicit`.
+ *
  * Containers with more members than the `pageSize` are paginated, as described in LWS, §Pagination.
  * Pagination links to the other pages are added to the metadata, using IANA relation URIs as predicates.
  * The requested page is determined by range preferences with the {@link LWS_PAGE_UNIT} unit.
@@ -86,6 +117,7 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
   private readonly requireExplicit: boolean;
   private readonly pageSize: number;
   private readonly pageParameter: string;
+  private readonly profileTypes: string[];
 
   /**
    * @param options - Options for the converter.
@@ -94,6 +126,8 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
    * @param options.requireExplicit - Whether one of the produced types needs to be explicitly requested.
    * @param options.pageSize - The maximum number of items on a page. Defaults to 1000.
    * @param options.pageParameter - The query parameter used in page URIs. Defaults to `page`.
+   * @param options.profileTypes - The RDF media types in which the LWS profile can be requested.
+   *                               Defaults to {@link LWS_PROFILE_TYPES}.
    */
   public constructor(options: {
     outputPreferences?: Record<string, number>;
@@ -101,6 +135,7 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
     requireExplicit?: boolean;
     pageSize?: number;
     pageParameter?: string;
+    profileTypes?: string[];
   } = {}) {
     super(INTERNAL_QUADS, options.outputPreferences ?? {
       [APPLICATION_LWS_JSON]: 1,
@@ -111,6 +146,7 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
     this.requireExplicit = options.requireExplicit ?? false;
     this.pageSize = options.pageSize ?? 1000;
     this.pageParameter = options.pageParameter ?? 'page';
+    this.profileTypes = options.profileTypes ?? LWS_PROFILE_TYPES;
   }
 
   public async canHandle(args: RepresentationConverterArgs): Promise<void> {
@@ -120,6 +156,9 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
     // No conversion is needed if the internal representation is acceptable
     if (getTypeWeight(INTERNAL_QUADS, cleanPreferences(args.preferences.type)) > 0) {
       throw new NotImplementedHttpError('Internal quads are acceptable so no conversion is needed.');
+    }
+    if (this.getProfileType(args.preferences)) {
+      return;
     }
     await super.canHandle(args);
     const outputTypes = await this.outputTypes;
@@ -136,9 +175,10 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
 
   public async handle({ identifier, representation, preferences }: RepresentationConverterArgs):
   Promise<Representation> {
-    const outputTypes = await this.outputTypes;
+    const profileType = this.getProfileType(preferences);
     // Prefer the LWS media type in case multiple of the equivalent types match equally well
-    const contentType = getConversionTarget(outputTypes, preferences.type) ?? APPLICATION_LWS_JSON;
+    const contentType = profileType ?? getConversionTarget(await this.outputTypes, preferences.type) ??
+      APPLICATION_LWS_JSON;
 
     const store = await readableToQuads(representation.data);
     const container = identifier.path;
@@ -160,7 +200,69 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
       items,
     };
 
-    return new BasicRepresentation(JSON.stringify(result), metadata);
+    if (!profileType) {
+      return new BasicRepresentation(JSON.stringify(result), metadata);
+    }
+    metadata.contentTypeObject = new ContentType(profileType, { profile: LWS_PROFILE });
+    if (profileType === APPLICATION_LD_JSON) {
+      return new BasicRepresentation(JSON.stringify(result), metadata);
+    }
+    return new BasicRepresentation(this.serializeProfile(result, profileType), metadata);
+  }
+
+  /**
+   * Returns the media type in which the LWS profile was requested,
+   * in case no other media type has a higher weight.
+   */
+  protected getProfileType(preferences: RepresentationConverterArgs['preferences']): string | undefined {
+    const profiled = preferences.profiles?.[LWS_PROFILE] ?? {};
+    let best: { type: string; weight: number } | undefined;
+    for (const type of this.profileTypes) {
+      const weight = profiled[type] ?? 0;
+      if (weight > (best?.weight ?? 0)) {
+        best = { type, weight };
+      }
+    }
+    if (!best) {
+      return;
+    }
+    const maxWeight = Math.max(...Object.values(preferences.type ?? {}));
+    return best.weight >= maxWeight ? best.type : undefined;
+  }
+
+  /**
+   * Serializes the RDF that the LWS container representation encodes, as defined by the LWS JSON-LD context,
+   * in the given RDF media type.
+   */
+  protected serializeProfile(container: LwsContainerRepresentation, contentType: string): string {
+    const { namedNode, literal, quad } = DataFactory;
+    const subject = namedNode(container.id);
+    const quads: Quad[] = [
+      quad(subject, RDF.terms.type, LWS.terms.Container),
+      quad(subject, LWS.terms.totalItems, literal(`${container.totalItems}`, XSD.terms.integer)),
+    ];
+    for (const item of container.items) {
+      const child = namedNode(item.id);
+      quads.push(quad(subject, LWS.terms.items, child));
+      // This converter only generates items with a single type
+      quads.push(quad(child, RDF.terms.type, item.type === 'Container' ? LWS.terms.Container : LWS.terms.DataResource));
+      if (item.format) {
+        quads.push(quad(child, DC.terms.format, literal(item.format)));
+      }
+      if (item.size !== undefined) {
+        quads.push(quad(child, SCHEMA.terms.size, literal(`${item.size}`, XSD.terms.long)));
+      }
+      if (item.modified) {
+        quads.push(quad(child, DC.terms.modified, literal(item.modified, XSD.terms.dateTime)));
+      }
+    }
+    const writer = new Writer({ format: contentType });
+    writer.addQuads(quads);
+    let result = '';
+    writer.end((error, output: string): void => {
+      result = output;
+    });
+    return result;
   }
 
   /**

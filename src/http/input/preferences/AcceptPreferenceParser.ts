@@ -1,5 +1,5 @@
 import type { HttpRequest } from '../../../server/HttpRequest';
-import type { AcceptHeader } from '../../../util/Header';
+import type { Accept, AcceptHeader } from '../../../util/Header';
 import {
   parseAccept,
   parseAcceptCharset,
@@ -11,7 +11,7 @@ import type { RepresentationPreferences } from '../../representation/Representat
 import { PreferenceParser } from './PreferenceParser';
 
 const parsers: {
-  name: Exclude<keyof RepresentationPreferences, 'range'>;
+  name: Exclude<keyof RepresentationPreferences, 'range' | 'profiles'>;
   header: string;
   parse: (value: string) => AcceptHeader[];
 }[] = [
@@ -25,6 +25,7 @@ const parsers: {
 /**
  * Extracts preferences from the Accept-* headers from an incoming {@link HttpRequest}.
  * Supports Accept, Accept-Charset, Accept-Encoding, Accept-Language and Accept-DateTime.
+ * The `profile` parameters of the Accept header are stored in the `profiles` preferences.
  */
 export class AcceptPreferenceParser extends PreferenceParser {
   public async handle({ request: { headers }}: { request: HttpRequest }): Promise<RepresentationPreferences> {
@@ -40,6 +41,22 @@ export class AcceptPreferenceParser extends PreferenceParser {
         }
       }
     }
+    if (typeof headers.accept === 'string') {
+      this.addProfiles(preferences, parseAccept(headers.accept));
+    }
     return preferences;
+  }
+
+  /**
+   * Stores the media ranges with a `profile` parameter, which can contain multiple space-separated URIs.
+   */
+  private addProfiles(preferences: RepresentationPreferences, accepts: Accept[]): void {
+    for (const { range, weight, parameters } of accepts) {
+      const profiles = parameters.mediaType.profile?.split(/\s+/u).filter((profile): boolean => profile.length > 0);
+      for (const profile of profiles ?? []) {
+        preferences.profiles ??= {};
+        preferences.profiles[profile] = { ...preferences.profiles[profile], [range]: weight };
+      }
+    }
   }
 }

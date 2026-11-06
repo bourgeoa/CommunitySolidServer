@@ -31,6 +31,14 @@ export interface RepresentationPreferences {
   datetime?: ValuePreferences;
   encoding?: ValuePreferences;
   language?: ValuePreferences;
+  /**
+   * The media ranges of the `type` preferences that request a specific profile (RFC 6906)
+   * through their `profile` parameter, grouped by profile URI.
+   * For example, `Accept: text/turtle; profile="https://example.com/p"`
+   * results in `{ 'https://example.com/p': { 'text/turtle': 1 }}`.
+   */
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+  profiles?: {[profile: string]: ValuePreferences };
   // `start` can be negative and implies the last X of a stream
   range?: { unit: string; parts: { start: number; end?: number }[] };
 }

@@ -1,18 +1,20 @@
-import { DataFactory } from 'n3';
+import 'jest-rdf';
+import { DataFactory as DF, Parser } from 'n3';
 import { BasicRepresentation } from '../../../../src/http/representation/BasicRepresentation';
 import type { Representation } from '../../../../src/http/representation/Representation';
 import type { RepresentationPreferences } from '../../../../src/http/representation/RepresentationPreferences';
 import {
   ContainerToLwsJsonConverter,
   LWS_CONTEXT,
+  LWS_PROFILE,
   PAGINATION_RELATIONS,
 } from '../../../../src/storage/conversion/ContainerToLwsJsonConverter';
 import { NotFoundHttpError } from '../../../../src/util/errors/NotFoundHttpError';
 import { NotImplementedHttpError } from '../../../../src/util/errors/NotImplementedHttpError';
 import { readableToString } from '../../../../src/util/StreamUtil';
-import { CONTENT_TYPE_TERM, DC, IANA, LDP, POSIX, RDF } from '../../../../src/util/Vocabularies';
+import { CONTENT_TYPE_TERM, DC, IANA, LDP, LWS, POSIX, RDF, SCHEMA, XSD } from '../../../../src/util/Vocabularies';
 
-const { namedNode: nn, literal, quad } = DataFactory;
+const { namedNode: nn, literal, quad } = DF;
 
 function itemIds(json: any): string[] {
   return json.items.map((item: any): string => item.id);
@@ -184,6 +186,97 @@ describe('A ContainerToLwsJsonConverter', (): void => {
         preferences: { type: { 'text/html': 1 }},
       });
       expect(result.metadata.contentType).toBe('application/lws+json');
+    });
+  });
+
+  describe('LWS profile', (): void => {
+    const c = container.path;
+    const profiled = (type: string, weight = 1): RepresentationPreferences => ({
+      type: { [type]: weight },
+      profiles: { [LWS_PROFILE]: { [type]: weight }},
+    });
+
+    beforeEach(async(): Promise<void> => {
+      representation = new BasicRepresentation([
+        DF.quad(DF.namedNode(c), LDP.terms.contains, DF.namedNode(`${c}a/`)),
+        DF.quad(DF.namedNode(c), LDP.terms.contains, DF.namedNode(`${c}b`)),
+        DF.quad(DF.namedNode(`${c}a/`), DC.terms.modified, DF.literal('2024-01-02T03:04:05Z')),
+        DF.quad(DF.namedNode(`${c}b`), CONTENT_TYPE_TERM, DF.literal('text/turtle')),
+        DF.quad(DF.namedNode(`${c}b`), POSIX.terms.size, DF.literal('123')),
+      ], 'internal/quads', false);
+    });
+
+    it('accepts profile requests, even if the representation needs to be explicit.', async(): Promise<void> => {
+      converter = new ContainerToLwsJsonConverter({ requireExplicit: true, strictPreferences: true });
+      await expect(converter.canHandle({ identifier: container, representation, preferences: profiled('text/turtle') }))
+        .resolves.toBeUndefined();
+    });
+
+    it('rejects profile requests if other types are preferred.', async(): Promise<void> => {
+      converter = new ContainerToLwsJsonConverter({ requireExplicit: true });
+      const preferences = profiled('text/turtle', 0.5);
+      preferences.type!['text/html'] = 1;
+      await expect(converter.canHandle({ identifier: container, representation, preferences }))
+        .rejects.toThrow(NotImplementedHttpError);
+    });
+
+    it('accepts profile requests without type preferences.', async(): Promise<void> => {
+      await expect(converter.canHandle({
+        identifier: container,
+        representation,
+        preferences: { profiles: { [LWS_PROFILE]: { 'text/turtle': 1 }}},
+      })).resolves.toBeUndefined();
+    });
+
+    it('ignores profile requests for other media types.', async(): Promise<void> => {
+      await expect(converter.canHandle({
+        identifier: container,
+        representation,
+        preferences: profiled('application/rdf+xml'),
+      })).rejects.toThrow(NotImplementedHttpError);
+    });
+
+    it('serializes the profile in RDF media types.', async(): Promise<void> => {
+      const result = await converter.handle({ identifier: container, representation, preferences: profiled('text/turtle') });
+      expect(result.metadata.contentTypeObject?.toHeaderValueString())
+        .toBe(`text/turtle; profile="${LWS_PROFILE}"`);
+      const quads = new Parser().parse(await readableToString(result.data));
+      expect(quads).toBeRdfIsomorphic([
+        DF.quad(DF.namedNode(c), RDF.terms.type, LWS.terms.Container),
+        DF.quad(DF.namedNode(c), LWS.terms.totalItems, DF.literal('2', XSD.terms.integer)),
+        DF.quad(DF.namedNode(c), LWS.terms.items, DF.namedNode(`${c}a/`)),
+        DF.quad(DF.namedNode(c), LWS.terms.items, DF.namedNode(`${c}b`)),
+        DF.quad(DF.namedNode(`${c}a/`), RDF.terms.type, LWS.terms.Container),
+        DF.quad(DF.namedNode(`${c}a/`), DC.terms.modified, DF.literal('2024-01-02T03:04:05.000Z', XSD.terms.dateTime)),
+        DF.quad(DF.namedNode(`${c}b`), RDF.terms.type, LWS.terms.DataResource),
+        DF.quad(DF.namedNode(`${c}b`), DC.terms.format, DF.literal('text/turtle')),
+        DF.quad(DF.namedNode(`${c}b`), SCHEMA.terms.size, DF.literal('123', XSD.terms.long)),
+      ]);
+    });
+
+    it('returns the LWS JSON-LD document for JSON-LD with the profile.', async(): Promise<void> => {
+      const preferences = profiled('application/ld+json');
+      preferences.type!['application/lws+json'] = 1;
+      const result = await converter.handle({ identifier: container, representation, preferences });
+      expect(result.metadata.contentTypeObject?.toHeaderValueString())
+        .toBe(`application/ld+json; profile="${LWS_PROFILE}"`);
+      expect(JSON.parse(await readableToString(result.data))).toEqual(expect.objectContaining({
+        '@context': LWS_CONTEXT,
+        totalItems: 2,
+      }));
+    });
+
+    it('can be configured with other profile types.', async(): Promise<void> => {
+      converter = new ContainerToLwsJsonConverter({ profileTypes: [ 'application/n-triples' ]});
+      await expect(converter.canHandle({ identifier: container, representation, preferences: profiled('text/turtle') }))
+        .rejects.toThrow(NotImplementedHttpError);
+      const result = await converter.handle({
+        identifier: container,
+        representation,
+        preferences: profiled('application/n-triples'),
+      });
+      expect(result.metadata.contentType).toBe('application/n-triples');
+      expect(new Parser({ format: 'N-Triples' }).parse(await readableToString(result.data))).toHaveLength(9);
     });
   });
 

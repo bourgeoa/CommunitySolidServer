@@ -170,6 +170,7 @@ export const AUTH = createVocabulary(
 export const DC = createVocabulary(
   'http://purl.org/dc/terms/',
   'description',
+  'format',
   'modified',
   'title',
 );
@@ -210,7 +211,9 @@ export const LDP = createVocabulary(
 
 export const LWS = createVocabulary(
   'https://www.w3.org/ns/lws#',
+  'items',
   'storage',
+  'totalItems',
 
   'Container',
   'DataResource',
@@ -270,6 +273,11 @@ export const RDF = createVocabulary(
 export const RDFS = createVocabulary(
   'http://www.w3.org/2000/01/rdf-schema#',
   'label',
+);
+
+export const SCHEMA = createVocabulary(
+  'http://schema.org/',
+  'size',
 );
 
 export const SOLID = createVocabulary(
@@ -362,6 +370,7 @@ export const XSD = createVocabulary(
   'dateTime',
   'duration',
   'integer',
+  'long',
   'string',
 );
 

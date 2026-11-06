@@ -29,11 +29,13 @@ describe('A UnionPreferenceParser', (): void => {
     parsers[1].handle.mockResolvedValue({
       type: { 'text/plain': 0.9 },
       language: { nl: 0.8 },
+      profiles: { 'https://a.example/': { 'text/plain': 0.9 }},
     });
 
     await expect(parser.handle({} as any)).resolves.toEqual({
       type: { 'text/turtle': 1, 'text/plain': 0.9 },
       language: { nl: 0.8 },
+      profiles: { 'https://a.example/': { 'text/plain': 0.9 }},
       range: { unit: 'bytes', parts: [{ start: 3, end: 5 }]},
     });
   });

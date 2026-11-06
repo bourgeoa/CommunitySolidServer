@@ -530,6 +530,17 @@ describe('HeaderUtil', (): void => {
       expect(contentType.toHeaderValueString()).toBe('text/plain; charset=utf-8; extra=test');
     });
 
+    it('quotes parameter values that are not tokens.', (): void => {
+      const contentType = new ContentType('text/turtle', {
+        profile: 'https://www.w3.org/ns/lws/v1',
+        quoted: '"already quoted"',
+        escaped: 'a "b" \\ c',
+      });
+      expect(contentType.toHeaderValueString()).toBe(
+        'text/turtle; escaped="a \\"b\\" \\\\ c"; profile="https://www.w3.org/ns/lws/v1"; quoted="already quoted"',
+      );
+    });
+
     it('can serialize to a correct header value string without parameters.', (): void => {
       const contentType: ContentType = new ContentType('text/plain');
       expect(contentType.toHeaderValueString()).toBe('text/plain');

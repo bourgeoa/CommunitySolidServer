@@ -43,6 +43,10 @@ Containers are represented as `application/lws+json`.
 In the LWS-only configurations, `application/ld+json` and `application/json` return the same document.
 In the dual configurations, `application/ld+json` keeps returning the LDP representation that Solid clients expect,
 so LWS clients need to request `application/lws+json` or `application/json`.
+In both, a container can be requested in the LWS profile by adding `profile="https://www.w3.org/ns/lws/v1"`
+to `application/ld+json`, `text/turtle`, `application/n-triples`, `application/trig`, or `application/n-quads`.
+The response then encodes the same RDF as the `application/lws+json` document,
+and its `Content-Type` contains the same `profile` parameter.
 
 Containers can be created with a `POST` or `PUT` request
 that has a `Link: <https://www.w3.org/ns/lws#Container>; rel="type"` header,
@@ -65,7 +69,10 @@ Server-managed links, such as the containment triples, can not be modified.
 
 The server contains an LWS authorization server.
 Its metadata can be found at `/.well-known/lws-configuration`.
-A `401` response contains a `WWW-Authenticate` header with an `as_uri` parameter pointing to it,
+A `401` response contains a `WWW-Authenticate` header with a `resource_metadata` parameter
+pointing to the [protected resource metadata](https://www.rfc-editor.org/rfc/rfc9728) of the requested resource,
+which is served under `/.well-known/oauth-protected-resource`.
+For clients of earlier drafts, the challenge also has an `as_uri` parameter pointing to the authorization server,
 and a `realm` parameter with the storage URI.
 
 Clients obtain an access token by exchanging an authentication credential at the token endpoint
@@ -81,6 +88,23 @@ The following authentication suites are supported:
   pointing to the issuer.
   WebIDs with a `solid:oidcIssuer` triple are also accepted,
   so the accounts of the identity provider of this server, and of other Solid identity providers, can be used.
+
+The `client_id` of an access token is the client identifier of the credential.
+Client identifiers that are not URIs, such as those of dynamically registered OpenID Connect clients,
+are put in the fragment of the issuer URI, for example `https://idp.example/#abc123`.
+
+A regular ID token only has the client as audience,
+so anyone who obtains it, such as a malicious authorization server the client was sent to, can exchange it.
+The server therefore checks who presents a token where it can:
+
+* An ID token with a `cnf` claim is only exchanged if the token request has a valid
+  [DPoP](https://www.rfc-editor.org/rfc/rfc9449) proof signed with the key in that claim.
+  The issued access token is still a `Bearer` token.
+* With `"requireRestrictedTokens": true` on the `OidcSubjectTokenVerifier`
+  in `config/identity/lws/default.json`, other ID tokens are only accepted
+  if their audience includes the authorization server.
+  This is off by default, as most identity providers, including the one of this server,
+  can not add the authorization server to the audience of their ID tokens.
 
 The resulting access tokens are presented as `Bearer` tokens.
 The agent in the access token is used as the WebID in WAC and ACP policies,

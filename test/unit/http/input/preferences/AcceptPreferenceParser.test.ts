@@ -26,6 +26,18 @@ describe('An AcceptPreferenceParser', (): void => {
       .resolves.toEqual({ type: { 'audio/basic': 1, 'audio/*': 0.2 }});
   });
 
+  it('stores the profile parameters of accept headers.', async(): Promise<void> => {
+    request.headers = { accept: 'text/turtle; profile="https://a.example/ https://b.example/", ' +
+      'application/ld+json; profile="https://a.example/"; q=0.5, text/plain; profile=""' };
+    await expect(preferenceParser.handle({ request })).resolves.toEqual({
+      type: { 'text/turtle': 1, 'application/ld+json': 0.5, 'text/plain': 1 },
+      profiles: {
+        'https://a.example/': { 'text/turtle': 1, 'application/ld+json': 0.5 },
+        'https://b.example/': { 'text/turtle': 1 },
+      },
+    });
+  });
+
   it('parses accept-charset headers.', async(): Promise<void> => {
     request.headers = { 'accept-charset': 'iso-8859-5, unicode-1-1;q=0.8' };
     await expect(preferenceParser.handle({ request }))

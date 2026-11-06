@@ -301,6 +301,25 @@ describe.each(combinations)('A %s server using %s', (protocol, authorization, pr
     );
   });
 
+  it('represents containers in the LWS profile when requested.', async(): Promise<void> => {
+    const profile = 'profile="https://www.w3.org/ns/lws/v1"';
+    let response = await fetch(container, {
+      headers: { authorization: `Bearer ${aliceToken}`, accept: `text/turtle; ${profile}` },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe(`text/turtle; ${profile}`);
+    const turtle = await response.text();
+    expect(turtle).toContain('<https://www.w3.org/ns/lws#items>');
+    expect(turtle).not.toContain('http://www.w3.org/ns/ldp#contains');
+
+    response = await fetch(container, {
+      headers: { authorization: `Bearer ${aliceToken}`, accept: `application/ld+json; ${profile}` },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe(`application/ld+json; ${profile}`);
+    await expect(response.json()).resolves.toEqual(expect.objectContaining({ id: container, type: 'Container' }));
+  });
+
   it(`${protocolArgs.dual ? 'keeps the LDP' : 'uses the LWS'} representation for JSON-LD.`, async(): Promise<void> => {
     const response = await fetch(container, {
       headers: { authorization: `Bearer ${aliceToken}`, accept: 'application/ld+json' },

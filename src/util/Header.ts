@@ -47,6 +47,17 @@ export interface AcceptLanguage extends AcceptHeader { }
 export interface AcceptDatetime extends AcceptHeader { }
 
 /**
+ * Returns the value as a quoted string if it is not a valid token, as defined in RFC 9110, §5.6.
+ * Values that are already quoted are returned as they are.
+ */
+function quoteParameterValue(value: string): string {
+  if (/^[!#$%&'*+.^_`|~\w-]+$/u.test(value) || /^"(?:[^"\\]|\\.)*"$/u.test(value)) {
+    return value;
+  }
+  return `"${value.replaceAll(/["\\]/gu, '\\$&')}"`;
+}
+
+/**
  * Contents of an HTTP Content-Type Header.
  * Optional parameters Record is included.
  */
@@ -61,7 +72,7 @@ export class ContentType {
   public toHeaderValueString(): string {
     const parameterStrings = Object.entries(this.parameters)
       .sort((entry1, entry2): number => entry1[0].localeCompare(entry2[0]))
-      .map(([ key, value ]): string => `${key}=${value}`);
+      .map(([ key, value ]): string => `${key}=${quoteParameterValue(value)}`);
     return [ this.value, ...parameterStrings ].join('; ');
   }
 }
