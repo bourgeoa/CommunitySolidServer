@@ -7,6 +7,7 @@ import { applyJsonMergePatch, isJsonObject } from './JsonMergePatch';
  * `Object.hasOwn`, which this package cannot use directly: the ES2021 lib does not declare it.
  */
 function hasOwn(target: object, key: string): boolean {
+  // eslint-disable-next-line prefer-object-has-own -- Object.hasOwn is not in the ES2021 lib this package targets
   return Object.prototype.hasOwnProperty.call(target, key);
 }
 
