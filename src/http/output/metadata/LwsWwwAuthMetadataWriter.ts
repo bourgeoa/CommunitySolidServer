@@ -38,8 +38,13 @@ export class LwsWwwAuthMetadataWriter extends MetadataWriter {
    * @param baseUrl - The base URL of the server. Needed to add the `resource_metadata` parameter.
    * @param metadataPath - The path of the protected resource metadata documents, relative to the base URL.
    */
-  public constructor(asUri: string, storageStrategy: StorageLocationStrategy, extraParameters = '', baseUrl?: string,
-    metadataPath?: string) {
+  public constructor(
+    asUri: string,
+    storageStrategy: StorageLocationStrategy,
+    extraParameters = '',
+    baseUrl?: string,
+    metadataPath?: string,
+  ) {
     super();
     this.asUri = asUri;
     this.storageStrategy = storageStrategy;

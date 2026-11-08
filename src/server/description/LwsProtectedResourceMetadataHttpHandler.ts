@@ -19,8 +19,11 @@ export const PROTECTED_RESOURCE_METADATA_PATH = '.well-known/oauth-protected-res
  * @param resource - The URL of the resource.
  * @param metadataPath - The well-known path, relative to the base URL.
  */
-export function getProtectedResourceMetadataUrl(baseUrl: string, resource: string,
-  metadataPath = PROTECTED_RESOURCE_METADATA_PATH): string {
+export function getProtectedResourceMetadataUrl(
+  baseUrl: string,
+  resource: string,
+  metadataPath = PROTECTED_RESOURCE_METADATA_PATH,
+): string {
   const base = ensureTrailingSlash(baseUrl);
   const metadataBase = joinUrl(base, metadataPath);
   if (!resource.startsWith(base)) {

@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { randomUUID } from 'node:crypto';
 import { DataFactory } from 'n3';
-import { getLoggerFor } from '../../../logging/LogUtil';
 import type { Credentials } from '../../../authentication/Credentials';
 import type { CredentialsExtractor } from '../../../authentication/CredentialsExtractor';
 import { isAbsoluteUri, LWS_CONTEXT_URI } from '../../../authorization/lws/AccessGrantUtil';

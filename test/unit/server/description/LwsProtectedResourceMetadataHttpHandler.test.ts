@@ -85,6 +85,7 @@ describe('A LwsProtectedResourceMetadataHttpHandler', (): void => {
 
   it('throws a 404 for other URLs.', async(): Promise<void> => {
     targetExtractor.handleSafe.mockResolvedValueOnce({ path: 'https://example.com/.well-known/oauth-protected-resources' });
-    await expect(handler.handle({ request, response: createResponse() })).rejects.toThrow(NotFoundHttpError);
+    response = createResponse();
+    await expect(handler.handle({ request, response })).rejects.toThrow(NotFoundHttpError);
   });
 });

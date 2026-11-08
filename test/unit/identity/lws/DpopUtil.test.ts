@@ -8,8 +8,10 @@ describe('DpopUtil', (): void => {
   let privateKey: KeyLike;
   let jwk: JWK;
 
+  const defaultClaims = { htm: 'POST', htu: url };
+
   async function createProof(
-    claims: Record<string, unknown> = { htm: 'POST', htu: url },
+    claims: Record<string, unknown> = defaultClaims,
     header: Record<string, unknown> = {},
   ): Promise<string> {
     return new SignJWT({ jti: 'id', ...claims })

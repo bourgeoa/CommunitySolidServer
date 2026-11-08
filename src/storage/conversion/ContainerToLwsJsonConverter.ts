@@ -260,6 +260,9 @@ export class ContainerToLwsJsonConverter extends BaseTypedRepresentationConverte
     writer.addQuads(quads);
     let result = '';
     writer.end((error, output: string): void => {
+      if (error) {
+        throw error;
+      }
       result = output;
     });
     return result;

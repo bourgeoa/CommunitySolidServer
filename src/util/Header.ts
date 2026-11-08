@@ -51,7 +51,7 @@ export interface AcceptDatetime extends AcceptHeader { }
  * Values that are already quoted are returned as they are.
  */
 function quoteParameterValue(value: string): string {
-  if (/^[!#$%&'*+.^_`|~\w-]+$/u.test(value) || /^"(?:[^"\\]|\\.)*"$/u.test(value)) {
+  if (/^[!#$%&'*+.^`|~\w-]+$/u.test(value) || /^"(?:[^"\\]|\\.)*"$/u.test(value)) {
     return value;
   }
   return `"${value.replaceAll(/["\\]/gu, '\\$&')}"`;
