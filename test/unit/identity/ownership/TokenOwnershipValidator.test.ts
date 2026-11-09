@@ -1,8 +1,8 @@
+import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { DataFactory } from 'n3';
 import type { Quad } from 'n3';
 import rdfDereferencer from 'rdf-dereference';
-import { v4 } from 'uuid';
 import { TokenOwnershipValidator } from '../../../../src/identity/ownership/TokenOwnershipValidator';
 import type { ExpiringStorage } from '../../../../src/storage/keyvalue/ExpiringStorage';
 import { BadRequestHttpError } from '../../../../src/util/errors/BadRequestHttpError';
@@ -11,7 +11,6 @@ import { SOLID } from '../../../../src/util/Vocabularies';
 
 const { literal, namedNode, quad } = DataFactory;
 
-jest.mock('uuid');
 jest.mock('rdf-dereference', (): any => ({
   dereference: jest.fn(),
 }));
@@ -43,7 +42,7 @@ describe('A TokenOwnershipValidator', (): void => {
   beforeEach(async(): Promise<void> => {
     const now = Date.now();
     jest.spyOn(Date, 'now').mockReturnValue(now);
-    jest.mocked(v4).mockReturnValue(token);
+    jest.spyOn(crypto, 'randomUUID').mockReturnValue(token as any);
 
     const map = new Map<string, any>();
     storage = {
@@ -97,5 +96,61 @@ describe('A TokenOwnershipValidator', (): void => {
     await expect(validator.handle({ webId })).rejects.toThrow(tokenString);
     // Second call will fail since it has the wrong verification triple
     await expect(validator.handle({ webId })).rejects.toThrow(tokenString);
+  });
+
+  describe('with blockedWebIdPatterns configured', (): void => {
+    const blockedPatterns = [
+      '^https?://169\\.254\\.',
+      '^https?://localhost',
+      '^https?://127\\.',
+      '^https?://10\\.',
+      '^https?://192\\.168\\.',
+    ];
+
+    beforeEach((): void => {
+      jest.clearAllMocks();
+      validator = new TokenOwnershipValidator(storage, 30, blockedPatterns);
+    });
+
+    it('rejects a WebID matching a blocked pattern before generating a token.', async(): Promise<void> => {
+      const blockedWebId = 'http://169.254.169.254/latest/meta-data/';
+      await expect(validator.handle({ webId: blockedWebId }))
+        .rejects.toThrow('The provided WebID is not accepted by this server.');
+      expect(storage.get).not.toHaveBeenCalled();
+      expect(storage.set).not.toHaveBeenCalled();
+      expect(rdfDereferenceMock.dereference).not.toHaveBeenCalled();
+    });
+
+    it('rejects a localhost WebID.', async(): Promise<void> => {
+      await expect(validator.handle({ webId: 'http://localhost:6379/' }))
+        .rejects.toThrow('The provided WebID is not accepted by this server.');
+      expect(rdfDereferenceMock.dereference).not.toHaveBeenCalled();
+    });
+
+    it('rejects a private IP range WebID.', async(): Promise<void> => {
+      await expect(validator.handle({ webId: 'http://192.168.1.100/profile' }))
+        .rejects.toThrow('The provided WebID is not accepted by this server.');
+      expect(rdfDereferenceMock.dereference).not.toHaveBeenCalled();
+    });
+
+    it('rejects a 10.x.x.x WebID.', async(): Promise<void> => {
+      await expect(validator.handle({ webId: 'http://10.0.0.1/profile' }))
+        .rejects.toThrow('The provided WebID is not accepted by this server.');
+      expect(rdfDereferenceMock.dereference).not.toHaveBeenCalled();
+    });
+
+    it('allows a public WebID that does not match any blocked pattern.', async(): Promise<void> => {
+      mockDereference(tokenTriple);
+      // First call stores token, second call verifies
+      await expect(validator.handle({ webId })).rejects.toThrow(tokenString);
+      await expect(validator.handle({ webId })).resolves.toBeUndefined();
+    });
+
+    it('has no blocked patterns by default (empty array).', async(): Promise<void> => {
+      const defaultValidator = new TokenOwnershipValidator(storage);
+      mockDereference(tokenTriple);
+      await expect(defaultValidator.handle({ webId })).rejects.toThrow(tokenString);
+      await expect(defaultValidator.handle({ webId })).resolves.toBeUndefined();
+    });
   });
 });

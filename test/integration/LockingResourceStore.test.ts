@@ -29,6 +29,7 @@ describe('A LockingResourceStore', (): void => {
   let source: ResourceStore;
   let getRepresentationSpy: jest.SpyInstance;
   let setRepresentationSpy: jest.SpyInstance;
+  let expiringRepresentation: Representation | undefined;
 
   beforeEach(async(): Promise<void> => {
     jest.clearAllMocks();
@@ -65,10 +66,13 @@ describe('A LockingResourceStore', (): void => {
     // Make sure something is in the store before we read from it in our tests.
     await source.setRepresentation({ path }, new BasicRepresentation([ 1, 2, 3 ], APPLICATION_OCTET_STREAM));
 
-    // Simulates a source store that consumes the incoming data before resolving
+    // Simulates a source store that waits for the incoming data to end before resolving
     setRepresentationSpy = jest.spyOn(source, 'setRepresentation');
     setRepresentationSpy.mockImplementation(
-      async(identifier, representation: Representation): Promise<any> => endOfStream(representation.data),
+      async(identifier, representation: Representation): Promise<any> => {
+        expiringRepresentation = representation;
+        return endOfStream(representation.data);
+      },
     );
   });
 
@@ -131,6 +135,7 @@ describe('A LockingResourceStore', (): void => {
     // Allow the lock to be acquired
     await flushPromises();
     expect(setRepresentationSpy).toHaveBeenCalledTimes(1);
+    expect(expiringRepresentation).toBeDefined();
 
     // Wait 1000ms without writing
     jest.advanceTimersByTime(1000);
@@ -157,16 +162,20 @@ describe('A LockingResourceStore', (): void => {
     // Allow the lock to be acquired
     await flushPromises();
     expect(setRepresentationSpy).toHaveBeenCalledTimes(1);
+    expect(expiringRepresentation).toBeDefined();
 
     // Wait 750ms and read
     jest.advanceTimersByTime(750);
     expect(representation.data.destroyed).toBe(false);
-    representation.data.read();
+    if (!expiringRepresentation) {
+      throw new Error('The source store did not receive an expiring representation.');
+    }
+    expiringRepresentation.data.read();
 
     // Wait 750ms and read
     jest.advanceTimersByTime(750);
     expect(representation.data.destroyed).toBe(false);
-    representation.data.read();
+    expiringRepresentation.data.read();
 
     // Wait 1000ms and watch the stream be destroyed
     jest.advanceTimersByTime(1000);

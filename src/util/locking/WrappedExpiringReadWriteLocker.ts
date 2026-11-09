@@ -55,13 +55,33 @@ export class WrappedExpiringReadWriteLocker implements ExpiringReadWriteLocker {
     let timer: Timeout;
     let maxTimer: Timeout | undefined;
     let createTimeout: () => Timeout;
+    let active = true;
+
+    function clearTimers(): void {
+      active = false;
+      clearTimeout(timer);
+      if (maxTimer) {
+        clearTimeout(maxTimer);
+        maxTimer = undefined;
+      }
+    }
 
     // Promise that throws an error when the timer finishes
     const timerPromise = new Promise<never>((resolve, reject): void => {
+      const logger = this.logger;
+
+      function rejectAfterTimeout(message: string, logLevel: 'error' | 'warn'): void {
+        clearTimers();
+        logger[logLevel](message);
+        reject(new InternalServerError(message));
+      }
+
       // Starts the timer that will cause this promise to error after a given time
       createTimeout = (): Timeout => setTimeout((): void => {
-        this.logger.error(`Lock expired after ${this.expiration}ms on ${identifier.path}`);
-        reject(new InternalServerError(`Lock expired after ${this.expiration}ms on ${identifier.path}`));
+        rejectAfterTimeout(
+          `Lock expired after ${this.expiration}ms on ${identifier.path}`,
+          'error',
+        );
       }, this.expiration);
 
       timer = createTimeout();
@@ -69,16 +89,19 @@ export class WrappedExpiringReadWriteLocker implements ExpiringReadWriteLocker {
       // Absolute deadline on the total hold time, which renewals do not extend
       if (this.maxHoldDuration > 0) {
         maxTimer = setTimeout((): void => {
-          this.logger.warn(`Lock reached its maximum hold duration of ${this.maxHoldDuration}ms on ${identifier.path}`);
-          reject(new InternalServerError(
+          rejectAfterTimeout(
             `Lock reached its maximum hold duration of ${this.maxHoldDuration}ms on ${identifier.path}`,
-          ));
+            'warn',
+          );
         }, this.maxHoldDuration);
       }
     });
 
     // Restarts the timer
     const renewTimer = (): void => {
+      if (!active) {
+        return;
+      }
       this.logger.verbose(`Renewed expiring lock on ${identifier.path}`);
       clearTimeout(timer);
       timer = createTimeout();
@@ -89,10 +112,7 @@ export class WrappedExpiringReadWriteLocker implements ExpiringReadWriteLocker {
       try {
         return await whileLocked(renewTimer);
       } finally {
-        clearTimeout(timer);
-        if (maxTimer) {
-          clearTimeout(maxTimer);
-        }
+        clearTimers();
       }
     }
 

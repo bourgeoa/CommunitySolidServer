@@ -1,8 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { NamedNode, Quad, Term } from '@rdfjs/types';
 import arrayifyStream from 'arrayify-stream';
 import { DataFactory } from 'n3';
-import { v4 as uuid } from 'uuid';
 import type { AuxiliaryStrategy } from '../http/auxiliary/AuxiliaryStrategy';
 import { BasicRepresentation } from '../http/representation/BasicRepresentation';
 import type { Patch } from '../http/representation/Patch';
@@ -617,7 +617,7 @@ export class DataAccessorBasedStore implements ResourceStore {
   protected createURI(container: ResourceIdentifier, isContainer: boolean, slug?: string): ResourceIdentifier {
     this.validateSlug(isContainer, slug);
     const base = ensureTrailingSlash(container.path);
-    const name = (slug && this.cleanSlug(slug)) ?? uuid();
+    const name = (slug && this.cleanSlug(slug)) ?? randomUUID();
     const suffix = isContainer ? '/' : '';
     return { path: `${base}${name}${suffix}` };
   }

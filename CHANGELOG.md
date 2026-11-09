@@ -3,6 +3,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## [7.3.0](https://github.com/CommunitySolidServer/CommunitySolidServer/compare/v7.2.0...v7.3.0) (2026-11-02)
+
+### Features
+
+* Recover the profile document of a linked WebID ([1a6917c](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/1a6917cc87abc7e00a8e050b7b084d2bc45aaaed))
+* Add a maximum hold duration to the expiring read-write locker ([ff42fb6](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/ff42fb61bddcfe1ac9aaa980e3cc1c93af1d91ea))
+* **identity:** support dedicated OIDC client storage ([ba365c6](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/ba365c6b2a0b46b12393fd1baab69c5afa5e9d79))
+
+### Fixes
+
+* Preserve patch properties under write locks ([cb771d4](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/cb771d4d924f9743425a284ce4dc5109a92c7c79))
+* Remove unsafe stream cast ([847b6ff](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/847b6ffb44e172649a8299fe91139b65bc4aeffb))
+* Potential fix for pull request finding ([a55af09](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/a55af0944563c1c0e5ffcbba596d0335ba34fb5c))
+* Keep write locks alive while request data is flowing ([a778362](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/a778362e1bfae1d16e042ad33eb2440cc10ecfab))
+* Find pod quota in subdomain mode, compute once by write not by chunk ([#2210](https://github.com/CommunitySolidServer/CommunitySolidServer/issues/2210)) ([2389a9c](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/2389a9cab22d4d326a462cf4c1b12278e2029ac0))
+
+### Chores
+
+* Remove arm/v7 from docker build ([066a317](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/066a3179cbd1e8059fb9237e7be63e43f130635d))
+* Update base image to node 24 ([3a09852](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/3a09852904b961fe791b2ff05fcbcbc75b5182b3))
+
+### Documentation
+
+* Simplify PR template ([3cd2aca](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/3cd2aca2d6b8815204520e272d6e5b0b4d7a6071))
+* Define expectations for AI-assisted contributions ([8cd3a0c](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/8cd3a0cea59d0cab21c5a796be140336c1ea39e3))
+* Clarify PR template branching and versioning ([643315b](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/643315b92c90e18426673d4bb58bc880a5389697))
+
+### Performance
+
+* **identity:** reuse the resolved input account for cookie persistence ([55b2223](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/55b2223c83308be4bfa0a85f3600efe4f2c5ad73))
+* **storage:** stream container listings to avoid O(children) memory ([#2211](https://github.com/CommunitySolidServer/CommunitySolidServer/issues/2211)) ([6350be2](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/6350be22151772be1dc8a1900e170484fda415e8))
+
+## [7.2.0](https://github.com/CommunitySolidServer/CommunitySolidServer/compare/v7.1.9...v7.2.0) (2026-07-22)
+
+### Features
+
+* Handle data corruption issues ([8e454a9](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/8e454a9af776ccdd09bfcf2ce984bb31b3cd4413))
+* Make pim:storage conditional based on checkbox ([d4fcf76](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/d4fcf766e81721398bf5a22798db13bb339e18bc))
+* Include pim:storage triple in WebID profile template by default ([f795265](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/f795265b27c77108539eb09a9bc40b6af30e8ba6))
+
+### Fixes
+
+* Prevent inconsistencies with repeated slashes in identifiers ([8ecae4c](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/8ecae4ca9f8bffd1ae7005b227acaa474f99726c))
+* Add blockedPatterns to TokenOwnershipValidator to prevent SSRF ([b66e241](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/b66e241896a4b07e4982e76bc43765c0a31961c6))
+* Make sure WebhookEmitter tokens are valid ([6a5b8b3](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/6a5b8b334fb3a4cbe0360bdd9f9c937ae62ff2f3))
+* Handle ENOTDIR in FileDataAccessor.getStats to prevent 500 on duplicate slug ([31794f3](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/31794f32830467536f8810f4e6739eacb6dc9b1a))
+
+### Documentation
+
+* Add security considerations about HTML resources ([d3008f0](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/d3008f0082adcca0c8f8951ba6968fd886d2f2f3))
+* Add security considerations about token ownership checks ([d139fe8](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/d139fe8e5f82985a43f37c60d82ae3bf5af3168f))
+
+### Testing
+
+* Add integration test for pim:storage triple in WebID profile ([388da6a](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/388da6aae4bc9ef18687bb2013f83970449f8601))
+* Add tests to check SSRF ([69d1b25](https://github.com/CommunitySolidServer/CommunitySolidServer/commit/69d1b255d286869aca3825bc8204fbfd55b9fc57))
+
 ## [7.1.9](https://github.com/CommunitySolidServer/CommunitySolidServer/compare/v7.1.8...v7.1.9) (2026-03-03)
 
 ### Features

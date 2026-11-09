@@ -1,6 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import fetch from 'cross-fetch';
 import { calculateJwkThumbprint, importJWK, SignJWT } from 'jose';
-import { v4 } from 'uuid';
 import type { JwkGenerator } from '../../../identity/configuration/JwkGenerator';
 import type { InteractionRoute } from '../../../identity/interaction/routing/InteractionRoute';
 import { getLoggerFor } from '../../../logging/LogUtil';
@@ -36,7 +36,7 @@ export class WebhookEmitter extends NotificationEmitter {
     this.issuer = trimTrailingSlashes(baseUrl);
     this.webId = webIdRoute.getPath();
     this.jwkGenerator = jwkGenerator;
-    this.expiration = expiration * 60 * 1000;
+    this.expiration = expiration * 60;
   }
 
   public async canHandle({ channel }: NotificationEmitterInput): Promise<void> {
@@ -54,9 +54,10 @@ export class WebhookEmitter extends NotificationEmitter {
     const publicKey = await this.jwkGenerator.getPublicKey();
 
     const privateKeyObject = await importJWK(privateKey);
+    const keyThumbprint = await calculateJwkThumbprint(publicKey, 'sha256');
 
     // Make sure both header and proof have the same timestamp
-    const time = Date.now();
+    const time = Math.floor(Date.now() / 1000);
 
     // Currently the spec does not define how the notification sender should identify.
     // The format used here has been chosen to be similar
@@ -66,14 +67,14 @@ export class WebhookEmitter extends NotificationEmitter {
       azp: this.webId,
       sub: this.webId,
       cnf: {
-        jkt: await calculateJwkThumbprint(publicKey, 'sha256'),
+        jkt: keyThumbprint,
       },
-    }).setProtectedHeader({ alg: privateKey.alg })
+    }).setProtectedHeader({ alg: privateKey.alg, kid: keyThumbprint })
       .setIssuedAt(time)
       .setExpirationTime(time + this.expiration)
       .setAudience([ this.webId, 'solid' ])
       .setIssuer(this.issuer)
-      .setJti(v4())
+      .setJti(randomUUID())
       .sign(privateKeyObject);
 
     // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-dpop#section-4.2
@@ -82,14 +83,15 @@ export class WebhookEmitter extends NotificationEmitter {
       htm: 'POST',
     }).setProtectedHeader({ alg: privateKey.alg, jwk: publicKey, typ: 'dpop+jwt' })
       .setIssuedAt(time)
-      .setJti(v4())
+      .setJti(randomUUID())
       .sign(privateKeyObject);
 
+    const contentType = representation.metadata.contentType;
     const response = await fetch(webhookChannel.sendTo, {
       method: 'POST',
       headers: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
-        'content-type': representation.metadata.contentType!,
+        ...contentType ? { 'content-type': contentType } : {},
         authorization: `DPoP ${dpopToken}`,
         dpop: dpopProof,
       },

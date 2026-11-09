@@ -5,11 +5,13 @@ import Describe = jest.Describe;
 
 const portNames = [
   // Integration
+  'AccountRecovery',
   'Accounts',
   'AclCacheInvalidation',
   'AcpServer',
   'Conditions',
   'ContentNegotiation',
+  'DataCorruption',
   'DynamicPods',
   'ExpiringDataCleanup',
   'FileBackend',
