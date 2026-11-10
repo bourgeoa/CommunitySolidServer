@@ -5,7 +5,6 @@ import type { Representation } from '../http/representation/Representation';
 import type { RepresentationPreferences } from '../http/representation/RepresentationPreferences';
 import type { ResourceIdentifier } from '../http/representation/ResourceIdentifier';
 import { getLoggerFor } from '../logging/LogUtil';
-import { guardStream } from '../util/GuardedStream';
 import type { ExpiringReadWriteLocker } from '../util/locking/ExpiringReadWriteLocker';
 import { endOfStream } from '../util/StreamUtil';
 import type { AtomicResourceStore } from './AtomicResourceStore';
@@ -132,16 +131,28 @@ export class LockingResourceStore implements AtomicResourceStore {
     // See https://github.com/CommunitySolidServer/CommunitySolidServer/pull/536#discussion_r562467957
     return new Promise((resolve, reject): void => {
       let representation: Representation;
+      let originalRead!: Representation['data']['read'];
       // Make the resource time out to ensure that the lock is always released eventually.
       this.locks.withReadLock(identifier, async(maintainLock): Promise<void> => {
         representation = await whileLocked();
+        const { data } = representation;
+        // This exact function reference is restored once the lock is released.
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        originalRead = data.read;
         resolve(this.createExpiringRepresentation(representation, maintainLock));
 
         // Release the lock when an error occurs or the data finished streaming
-        await this.waitForStreamToEnd(representation.data);
+        try {
+          await this.waitForStreamToEnd(data);
+        } finally {
+          data.read = originalRead;
+        }
       }).catch((error: unknown): void => {
-        // Destroy the source stream in case the lock times out
-        representation?.data.destroy(error as Error);
+        // Restore the read patch and destroy the source stream in case the lock times out
+        if (representation) {
+          representation.data.read = originalRead;
+          representation.data.destroy(error as Error);
+        }
 
         // Let this function return an error in case something went wrong getting the data
         // or in case the timeout happens before `func` returned
@@ -164,18 +175,23 @@ export class LockingResourceStore implements AtomicResourceStore {
     whileLocked: (representation: T) => Promise<TResult>,
   ): Promise<TResult> {
     let operationActive = false;
+    // This exact function reference is restored once the operation completes.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const originalRead = inputRepresentation.data.read;
     return this.locks.withWriteLock(identifier, async(maintainLock): Promise<TResult> => {
       operationActive = true;
       try {
         const expiringRepresentation = this.createExpiringRepresentation(inputRepresentation, maintainLock);
         return await whileLocked(expiringRepresentation);
       } finally {
+        inputRepresentation.data.read = originalRead;
         operationActive = false;
       }
     }).catch((error: unknown): never => {
       // Destroy the source stream when an acquired lock expires while the operation is still active.
       // This prevents a source store from continuing a write without the protection of the lock.
       if (operationActive) {
+        inputRepresentation.data.read = originalRead;
         inputRepresentation.data.destroy(error as Error);
       }
       throw error;
@@ -191,19 +207,21 @@ export class LockingResourceStore implements AtomicResourceStore {
   protected createExpiringRepresentation<T extends Representation>(representation: T, maintainLock: () => void): T {
     const source = representation.data;
     // Spy on the source to maintain the lock upon reading.
-    const data = Object.create(source, {
-      read: {
-        value(size: number): unknown {
-          maintainLock();
-          return source.read(size);
-        },
-      },
-    }) as Readable;
+    // Keep the same stream object: stream implementations store their event state on the instance,
+    // so an Object.create copy makes listeners run with the wrong receiver, which breaks consumers
+    // that iterate the data (`for await`) instead of piping it.
+    // The caller restores the exact function reference once the lock is released.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const originalRead = source.read;
+    source.read = (size?: number): unknown => {
+      maintainLock();
+      return originalRead.call(source, size);
+    };
 
     // Reuse metadata to avoid duplicating potentially large container listings.
     return {
       ...representation,
-      data: guardStream(data),
+      data: source,
       // BasicRepresentation defines isEmpty on its prototype, so it is not copied by the spread.
       isEmpty: representation.isEmpty,
     };

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import type { Readable } from 'node:stream';
 import { Algebra } from 'sparqlalgebrajs';
 import type { AuxiliaryIdentifierStrategy } from '../../../src/http/auxiliary/AuxiliaryIdentifierStrategy';
 import { BasicRepresentation } from '../../../src/http/representation/BasicRepresentation';
@@ -11,6 +12,7 @@ import type { ResourceStore } from '../../../src/storage/ResourceStore';
 import type { ExpiringReadWriteLocker } from '../../../src/util/locking/ExpiringReadWriteLocker';
 import type { ReadWriteLocker } from '../../../src/util/locking/ReadWriteLocker';
 import type { PromiseOrValue } from '../../../src/util/PromiseUtil';
+import type { Guarded } from '../../../src/util/GuardedStream';
 import { guardedStreamFrom } from '../../../src/util/StreamUtil';
 import { flushPromises } from '../../util/Util';
 
@@ -28,6 +30,7 @@ describe('A LockingResourceStore', (): void => {
   let auxiliaryStrategy: AuxiliaryIdentifierStrategy;
   let order: string[];
   let timeoutTrigger: EventEmitter;
+  let readable: Guarded<Readable>;
 
   beforeEach(async(): Promise<void> => {
     order = [];
@@ -38,7 +41,7 @@ describe('A LockingResourceStore', (): void => {
 
     data = { data: guardedStreamFrom([ 1, 2, 3 ]) } as any;
 
-    const readable = guardedStreamFrom([ 1, 2, 3 ]);
+    readable = guardedStreamFrom([ 1, 2, 3 ]);
     const destroy = readable.destroy.bind(readable);
     jest.spyOn(readable, 'destroy').mockImplementation((error): any => destroy.call(readable, error));
     source = {
@@ -167,7 +170,8 @@ describe('A LockingResourceStore', (): void => {
     const expiringPatch = jest.mocked(source.modifyResource).mock.calls[0][1] as N3Patch;
     expect(source.modifyResource).toHaveBeenLastCalledWith(subjectId, expiringPatch, undefined);
     expect(expiringPatch).not.toBe(patch);
-    expect(expiringPatch.data).not.toBe(patch.data);
+    // The same stream object is used so consumers can iterate it; `read` is restored after the operation.
+    expect(expiringPatch.data).toBe(patch.data);
     expect(expiringPatch.deletes).toBe(patch.deletes);
     expect(expiringPatch.inserts).toBe(patch.inserts);
     expect(expiringPatch.conditions).toBe(patch.conditions);
@@ -203,10 +207,10 @@ describe('A LockingResourceStore', (): void => {
     const expiringRepresentation = jest.mocked(source.setRepresentation).mock.calls[0][1];
     expect(source.setRepresentation).toHaveBeenLastCalledWith(subjectId, expiringRepresentation, undefined);
     expect(expiringRepresentation).not.toBe(data);
-    expect(expiringRepresentation.data).not.toBe(data.data);
+    expect(expiringRepresentation.data).toBe(data.data);
     expect(maintainLock).toHaveBeenCalledTimes(2);
 
-    // The original stream is not adapted
+    // The read patch is undone once the operation completes
     expect(data.data.read).toBe(originalRead);
     data.data.read();
     expect(maintainLock).toHaveBeenCalledTimes(2);
@@ -250,7 +254,7 @@ describe('A LockingResourceStore', (): void => {
 
     await store.modifyResource(subjectId, patch);
     const expiringPatch = jest.mocked(source.modifyResource).mock.calls[0][1] as SparqlUpdatePatch;
-    expect(expiringPatch.data).not.toBe(patch.data);
+    expect(expiringPatch.data).toBe(patch.data);
     expect(expiringPatch.algebra).toBe(patch.algebra);
   });
 
@@ -330,6 +334,27 @@ describe('A LockingResourceStore', (): void => {
     expect(source.getRepresentation).toHaveBeenCalledTimes(1);
     expect(source.getRepresentation).toHaveBeenLastCalledWith(subjectId, {}, undefined);
     expect(order).toEqual([ 'lock read', 'getRepresentation', 'end', 'unlock read' ]);
+  });
+
+  it('returns the source stream and restores its read method afterwards.', async(): Promise<void> => {
+    // eslint-disable-next-line jest/unbound-method
+    const originalRead = readable.read;
+    const representation = await store.getRepresentation(subjectId, {});
+
+    // The exact source stream is returned. A derived object would break consumers that iterate the data
+    // (`for await`): EventEmitter state lives on the instance, so listeners would be attached to the
+    // prototype's event map and run with the wrong receiver.
+    expect(representation.data).toBe(readable);
+
+    const chunks: unknown[] = [];
+    for await (const chunk of representation.data) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toEqual([ 1, 2, 3 ]);
+
+    await flushPromises();
+    expect(readable.read).toBe(originalRead);
+    expect(order).toEqual([ 'lock read', 'getRepresentation', 'unlock read' ]);
   });
 
   it('acquires the lock on the subject resource when reading an auxiliary resource.', async(): Promise<void> => {
